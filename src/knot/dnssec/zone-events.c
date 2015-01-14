@@ -240,8 +240,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 	}
 
 	// Sign added NSEC(3)
-	/* TODO: distinguish new NSEC(3) RRSets */
-	ret = knot_zone_sign_nsecs_in_changeset(&zone_keys, &policy,
+	ret = knot_zone_sign_nsecs_in_changeset(old_zone, &zone_keys, &policy,
 	                                        out_ch);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign changeset (%s)",
@@ -271,7 +270,6 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 	 *       knot_dnssec_policy_refresh_time() is called instead.
 	 * TODO: Maybe do not plan any resign, resigning of the next batch
 	 *       should be already planned.
-	 * TODO: First batch is not set if no new RRSets were inserted!!
 	 */
 	assert(policy.first_batch != 0);
 	*refresh_at = knot_dnssec_policy_refresh_time(&policy,

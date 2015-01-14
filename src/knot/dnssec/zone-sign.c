@@ -1095,6 +1095,53 @@ static inline void next_batch(knot_dnssec_policy_t *policy)
 	policy->batch_nr = (policy->batch_nr % policy->batch_count) + 1;
 }
 
+static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
+                                   const knot_rrset_t *old_rrsigs,
+                                   uint16_t type, bool new_rrset)
+{
+	if (new_rrset) {
+		// New RRSet => move to next batch, counted from 1. */
+		next_batch(policy);
+		policy->cur_batch = batch_lifetime(policy);
+	} else {
+		// RRSet already in zone, retain its batch
+		assert(old_rrsigs->owner != NULL);
+		uint32_t rrsig_ex = expiration(old_rrsigs, type);
+		assert(rrsig_ex != 0);
+		policy->cur_batch = rrsig_ex - policy->now;
+		/* TODO[jitter] Remove this assert. */
+		assert(policy->first_batch == 0
+		       || (policy->cur_batch - policy->first_batch)
+		          % (policy->sign_lifetime / policy->batch_count) == 0);
+	}
+}
+
+/*!
+ * \note This function needs policy->first_batch, policy->sign_lifetime and
+ *       policy->batch_count to be already set.
+ */
+static void assign_batch(const zone_contents_t *old_zone,
+                         const knot_rrset_t *chg_rrset,
+                         knot_dnssec_policy_t *policy)
+{
+	// Check if such name+type is in the old zone
+	const zone_node_t *old_node = NULL;
+	if (chg_rrset->type == KNOT_RRTYPE_NSEC3) {
+		old_node = zone_contents_find_nsec3_node(old_zone, chg_rrset->owner);
+	} else {
+		old_node = zone_contents_find_node(old_zone, chg_rrset->owner);
+	}
+	knot_rrset_t old_rrset = { 0 };
+	knot_rrset_t old_rrsigs = { 0 };
+	if (old_node) {
+		 old_rrset = node_rrset(old_node, chg_rrset->type);
+		 old_rrsigs = node_rrset(old_node, KNOT_RRTYPE_RRSIG);
+	}
+
+	assign_batch_for_rrset(policy, &old_rrsigs, chg_rrset->type,
+	                       !old_node || old_rrset.type != chg_rrset->type);
+}
+
 /*!
  * \brief Wrapper function for changeset signing - to be used with changeset
  *        apply functions.
@@ -1123,30 +1170,7 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset,
 			return ret;
 		}
 
-		// Check if such name+type is in the old zone
-		const zone_node_t *old_node = zone_contents_find_node(
-		                              args->old_zone, chg_rrset->owner);
-		knot_rrset_t old_rrset = { 0 };
-		if (old_node) {
-			 old_rrset = node_rrset(old_node, chg_rrset->type);
-		}
-
-		if (!old_node || old_rrset.type != chg_rrset->type) {
-			// New RRSet => move to next batch, counted from 1. */
-			next_batch(args->policy);
-			args->policy->cur_batch = batch_lifetime(args->policy);
-		} else {
-			// RRSet already in zone, retain its batch
-			assert(rrsigs.owner != NULL);
-			uint32_t rrsig_ex = expiration(&rrsigs, chg_rrset->type);
-			assert(rrsig_ex != 0);
-			args->policy->cur_batch = rrsig_ex - args->policy->now;
-			/* TODO[jitter] Remove this assert. */
-			assert(args->policy->first_batch == 0
-			       || (args->policy->cur_batch - args->policy->first_batch)
-			          % (args->policy->sign_lifetime / args->policy->batch_count)
-			          == 0);
-		}
+		assign_batch(args->old_zone, chg_rrset, args->policy);
 
 		// Check for RRSet in the 'already_signed' table
 		if (args->signed_tree && (should_sign && knot_rrset_empty(&zone_rrset))) {
@@ -1333,6 +1357,9 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 		}
 	}
 
+	// assign batch to the SOA RRSet
+	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA, false);
+
 	// copy old SOA and create new SOA with updated serial
 
 	knot_rrset_t *soa_from = NULL;
@@ -1422,7 +1449,8 @@ int knot_zone_sign_changeset(const zone_contents_t *old_zone,
 /*!
  * \brief Sign NSEC/NSEC3 nodes in changeset and update the changeset.
  */
-int knot_zone_sign_nsecs_in_changeset(const knot_zone_keys_t *zone_keys,
+int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *old_zone,
+                                      const knot_zone_keys_t *zone_keys,
                                       const knot_dnssec_policy_t *policy,
                                       changeset_t *changeset)
 {
@@ -1437,8 +1465,9 @@ int knot_zone_sign_nsecs_in_changeset(const knot_zone_keys_t *zone_keys,
 	while (!knot_rrset_empty(&rr)) {
 		if (rr.type == KNOT_RRTYPE_NSEC ||
 		    rr.type == KNOT_RRTYPE_NSEC3) {
-			int ret =  add_missing_rrsigs(&rr, NULL, zone_keys,
-			                              policy, changeset);
+			assign_batch(old_zone, &rr, policy);
+			int ret = add_missing_rrsigs(&rr, NULL, zone_keys,
+			                             policy, changeset);
 			if (ret != KNOT_EOK) {
 				changeset_iter_clear(&itt);
 				return ret;

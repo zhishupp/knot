@@ -119,7 +119,8 @@ int knot_zone_sign_changeset(const zone_contents_t *old_zone,
  *
  * \return Error code, KNOT_EOK if successful.
  */
-int knot_zone_sign_nsecs_in_changeset(const knot_zone_keys_t *zone_keys,
+int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *old_zone,
+                                      const knot_zone_keys_t *zone_keys,
                                       const knot_dnssec_policy_t *policy,
                                       changeset_t *changeset);
 
