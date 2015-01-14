@@ -458,6 +458,85 @@ static int remove_standalone_rrsigs(const zone_node_t *node,
 	return KNOT_EOK;
 }
 
+static inline uint32_t batch_lifetime(knot_dnssec_policy_t *policy)
+{
+	/* Batch is counted from 1. */
+	return policy->first_batch + (policy->batch_nr - 1) *
+	                (policy->sign_lifetime / policy->batch_count);
+}
+
+static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
+{
+	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
+		const uint16_t type_covered =
+			knot_rrsig_type_covered(&rrsigs->rrs, i);
+		if (type_covered == type) {
+			return knot_rrsig_sig_expiration(&rrsigs->rrs, i);
+		}
+	}
+
+	return 0;
+}
+
+static inline void next_batch(knot_dnssec_policy_t *policy)
+{
+	/* Batch is counted from 1. 0 means no batch was yet assigned. */
+	policy->batch_nr = (policy->batch_nr % policy->batch_count) + 1;
+}
+
+static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
+                                   const knot_rrset_t *old_rrsigs,
+                                   uint16_t type)
+{
+	assert(policy);
+	assert(old_rrsigs);
+
+	uint32_t rrsig_ex = 0;
+	if (old_rrsigs->owner != NULL) {
+		rrsig_ex = expiration(old_rrsigs, type);
+	}
+
+	if (rrsig_ex == 0) {
+		// No old RRSIGs => move to next batch, counted from 1. */
+		next_batch(policy);
+		policy->cur_batch = batch_lifetime(policy);
+	} else {
+		// RRSet already in zone, retain its batch
+		policy->cur_batch = rrsig_ex - policy->now;
+		// If expired, extend by whole lifetime
+		if (rrsig_ex <= policy->refresh_before) {
+			policy->cur_batch += policy->sign_lifetime;
+		}
+		/* TODO[jitter] Remove this assert. */
+		assert(policy->first_batch == 0
+		       || (policy->cur_batch - policy->first_batch)
+		          % (policy->sign_lifetime / policy->batch_count) == 0);
+	}
+}
+
+/*!
+ * \note This function needs policy->first_batch, policy->sign_lifetime and
+ *       policy->batch_count to be already set.
+ */
+static void assign_batch(const zone_contents_t *old_zone,
+                         const knot_rrset_t *chg_rrset,
+                         knot_dnssec_policy_t *policy)
+{
+	// Check if such name+type is in the old zone
+	const zone_node_t *old_node = NULL;
+	if (chg_rrset->type == KNOT_RRTYPE_NSEC3) {
+		old_node = zone_contents_find_nsec3_node(old_zone, chg_rrset->owner);
+	} else {
+		old_node = zone_contents_find_node(old_zone, chg_rrset->owner);
+	}
+	knot_rrset_t old_rrsigs = { 0 };
+	if (old_node) {
+		 old_rrsigs = node_rrset(old_node, KNOT_RRTYPE_RRSIG);
+	}
+
+	assign_batch_for_rrset(policy, &old_rrsigs, chg_rrset->type);
+}
+
 /*!
  * \brief Update RRSIGs in a given node by updating changeset.
  *
@@ -496,9 +575,11 @@ static int sign_node_rrsets(const zone_node_t *node,
 			continue;
 		}
 
+		assign_batch_for_rrset(policy, &rrsigs, rrset.type);
+
 		if (policy->forced_sign) {
-			result = force_resign_rrset(&rrset, &rrsigs, zone_keys, policy,
-			         changeset);
+			result = force_resign_rrset(&rrset, &rrsigs, zone_keys,
+			                            policy, changeset);
 		} else {
 			result = resign_rrset(&rrset, &rrsigs, zone_keys, policy,
 			                      changeset, expires_at);
@@ -1069,79 +1150,6 @@ static int rr_already_signed(const knot_rrset_t *rrset, hattrie_t *t,
 	return KNOT_EOK;
 }
 
-static inline uint32_t batch_lifetime(knot_dnssec_policy_t *policy)
-{
-	/* Batch is counted from 1. */
-	return policy->first_batch + (policy->batch_nr - 1) *
-	                (policy->sign_lifetime / policy->batch_count);
-}
-
-static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
-{
-	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
-		const uint16_t type_covered =
-			knot_rrsig_type_covered(&rrsigs->rrs, i);
-		if (type_covered == type) {
-			return knot_rrsig_sig_expiration(&rrsigs->rrs, i);
-		}
-	}
-
-	return 0;
-}
-
-static inline void next_batch(knot_dnssec_policy_t *policy)
-{
-	/* Batch is counted from 1. 0 means no batch was yet assigned. */
-	policy->batch_nr = (policy->batch_nr % policy->batch_count) + 1;
-}
-
-static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
-                                   const knot_rrset_t *old_rrsigs,
-                                   uint16_t type, bool new_rrset)
-{
-	if (new_rrset) {
-		// New RRSet => move to next batch, counted from 1. */
-		next_batch(policy);
-		policy->cur_batch = batch_lifetime(policy);
-	} else {
-		// RRSet already in zone, retain its batch
-		assert(old_rrsigs->owner != NULL);
-		uint32_t rrsig_ex = expiration(old_rrsigs, type);
-		assert(rrsig_ex != 0);
-		policy->cur_batch = rrsig_ex - policy->now;
-		/* TODO[jitter] Remove this assert. */
-		assert(policy->first_batch == 0
-		       || (policy->cur_batch - policy->first_batch)
-		          % (policy->sign_lifetime / policy->batch_count) == 0);
-	}
-}
-
-/*!
- * \note This function needs policy->first_batch, policy->sign_lifetime and
- *       policy->batch_count to be already set.
- */
-static void assign_batch(const zone_contents_t *old_zone,
-                         const knot_rrset_t *chg_rrset,
-                         knot_dnssec_policy_t *policy)
-{
-	// Check if such name+type is in the old zone
-	const zone_node_t *old_node = NULL;
-	if (chg_rrset->type == KNOT_RRTYPE_NSEC3) {
-		old_node = zone_contents_find_nsec3_node(old_zone, chg_rrset->owner);
-	} else {
-		old_node = zone_contents_find_node(old_zone, chg_rrset->owner);
-	}
-	knot_rrset_t old_rrset = { 0 };
-	knot_rrset_t old_rrsigs = { 0 };
-	if (old_node) {
-		 old_rrset = node_rrset(old_node, chg_rrset->type);
-		 old_rrsigs = node_rrset(old_node, KNOT_RRTYPE_RRSIG);
-	}
-
-	assign_batch_for_rrset(policy, &old_rrsigs, chg_rrset->type,
-	                       !old_node || old_rrset.type != chg_rrset->type);
-}
-
 /*!
  * \brief Wrapper function for changeset signing - to be used with changeset
  *        apply functions.
@@ -1358,7 +1366,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 	}
 
 	// assign batch to the SOA RRSet
-	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA, false);
+	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA);
 
 	// copy old SOA and create new SOA with updated serial
 

@@ -118,8 +118,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	}
 
 	// generate NSEC records
-	result = knot_zone_create_nsec_chain(zone, out_ch,
-	                                     &zone_keys, &policy);
+	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to create NSEC(3) chain (%s)",
 		               knot_strerror(result));
@@ -263,12 +262,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 
 	knot_free_zone_keys(&zone_keys);
 
-	/* Note: This is a bit unclear, because the value of
-	 *       `policy.refresh_before` is used in another context.
-	 *       To determine when the next resign event should occur in the
-	 *       main signing function knot_zone_sign(), the
-	 *       knot_dnssec_policy_refresh_time() is called instead.
-	 * TODO: Maybe do not plan any resign, resigning of the next batch
+	/* TODO: Maybe do not plan any resign, resigning of the next batch
 	 *       should be already planned.
 	 */
 	assert(policy.first_batch != 0);

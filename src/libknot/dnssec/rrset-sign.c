@@ -278,7 +278,7 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 		sig_expire += policy->cur_batch;
 	} else {
 		/* TODO[jitter] Remove this assert. */
-		//assert(0);
+		assert(0);
 		sig_expire += policy->sign_lifetime;
 	}
 
