@@ -26,6 +26,27 @@
 #include "knot/dnssec/zone-sign.h"
 #include "knot/common/debug.h"
 #include "knot/zone/zone.h"
+#include "libknot/rrtype/rrsig.h"
+
+static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
+                                const zone_contents_t *zone)
+{
+	knot_rrset_t apex_rrsig = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
+	if (apex_rrsig.type != KNOT_RRTYPE_RRSIG) {
+		// No RRSIG, first batch is one batch interval from now
+		return policy->sign_lifetime / policy->batch_count;
+	}
+
+	/* Just get any lifetime, the first can be counted from it.
+	 * Expiration is absolute time, convert to relative.
+	 */
+	uint32_t lt = knot_rrsig_sig_expiration(&apex_rrsig.rrs, 0)
+	              - policy->now;
+	/* Any signature shouln'd expire now. */
+	assert(lt > 0);
+
+	return lt % (policy->sign_lifetime / policy->batch_count);
+}
 
 static int init_dnssec_structs(const zone_contents_t *zone,
                                const conf_zone_t *config,
@@ -59,6 +80,14 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	if (config->sig_lifetime > 0) {
 		knot_dnssec_policy_set_sign_lifetime(policy, config->sig_lifetime);
 	}
+
+	// Get the time of the first batch in the zone
+	policy->first_batch = get_first_batch(policy, zone);
+
+	printf("Initialized policy: batch count: %u, lifetime: %u, "
+	       "refresh before: %u, first batch: %u\n", policy->batch_count,
+	       policy->sign_lifetime, policy->refresh_before,
+	       policy->first_batch);
 
 	return KNOT_EOK;
 }
@@ -101,8 +130,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	                changeset_empty(out_ch));
 
 	// add missing signatures
-	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch,
-	                        refresh_at);
+	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch, refresh_at);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign the zone (%s)",
 		               knot_strerror(result));
@@ -165,7 +193,8 @@ int knot_dnssec_zone_sign_force(zone_contents_t *zone, const conf_zone_t *zone_c
 	                 refresh_at);
 }
 
-int knot_dnssec_sign_changeset(const zone_contents_t *zone,
+int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
+                               const zone_contents_t *zone,
                                conf_zone_t *zone_config,
                                const changeset_t *in_ch,
                                changeset_t *out_ch,
@@ -192,7 +221,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	}
 
 	// Sign added and removed RRSets in changeset
-	ret = knot_zone_sign_changeset(zone, in_ch, out_ch,
+	ret = knot_zone_sign_changeset(old_zone, zone, in_ch, out_ch,
 	                               &zone_keys, &policy);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign changeset (%s)",
@@ -211,6 +240,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	}
 
 	// Sign added NSEC(3)
+	/* TODO: distinguish new NSEC(3) RRSets */
 	ret = knot_zone_sign_nsecs_in_changeset(&zone_keys, &policy,
 	                                        out_ch);
 	if (ret != KNOT_EOK) {
@@ -234,7 +264,18 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 
 	knot_free_zone_keys(&zone_keys);
 
-	*refresh_at = policy.refresh_before; // only new signatures are made
+	/* Note: This is a bit unclear, because the value of
+	 *       `policy.refresh_before` is used in another context.
+	 *       To determine when the next resign event should occur in the
+	 *       main signing function knot_zone_sign(), the
+	 *       knot_dnssec_policy_refresh_time() is called instead.
+	 * TODO: Maybe do not plan any resign, resigning of the next batch
+	 *       should be already planned.
+	 * TODO: First batch is not set if no new RRSets were inserted!!
+	 */
+	assert(policy.first_batch != 0);
+	*refresh_at = knot_dnssec_policy_refresh_time(&policy,
+	                                       policy.now + policy.first_batch);
 
 	return KNOT_EOK;
 }

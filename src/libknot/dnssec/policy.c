@@ -30,6 +30,8 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 	}
 
 	uint32_t signature_safety = policy->sign_lifetime / 10;
+	signature_safety = MAX(signature_safety, KNOT_DNSSEC_MIN_REFRESH);
+
 	if (earliest_expiration <= signature_safety) {
 		return 0;
 	}
@@ -45,11 +47,19 @@ void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
 		return;
 	}
 
-	uint32_t max_expiration = policy->now + sign_lifetime;
-
 	policy->sign_lifetime = sign_lifetime;
-	policy->refresh_before = knot_dnssec_policy_refresh_time(policy,
-	                                                         max_expiration);
+
+	if (policy->batch_count == 0) {
+		policy->batch_count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
+	}
+
+	/* Batches must have some minimal interval between them. */
+	if (sign_lifetime / policy->batch_count < KNOT_DNSSEC_MIN_BATCH_INTERVAL) {
+		policy->batch_count = sign_lifetime / KNOT_DNSSEC_MIN_BATCH_INTERVAL;
+	}
+
+	/* Resign only signatures from the next batch. */
+	policy->refresh_before = policy->now + sign_lifetime / policy->batch_count;
 }
 
 _public_
@@ -63,6 +73,7 @@ void knot_dnssec_init_default_policy(knot_dnssec_policy_t *policy)
 
 	policy->now = time(NULL);
 	policy->soa_up = KNOT_SOA_SERIAL_UPDATE;
+	policy->batch_count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
 
 	knot_dnssec_policy_set_sign_lifetime(policy, KNOT_DNSSEC_DEFAULT_LIFETIME);
 }

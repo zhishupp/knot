@@ -590,9 +590,10 @@ static int zone_tree_sign(zone_tree_t *tree,
  * \brief Struct to carry data for changeset signing callback functions.
  */
 typedef struct {
+	const zone_contents_t *old_zone;
 	const zone_contents_t *zone;
 	const knot_zone_keys_t *zone_keys;
-	const knot_dnssec_policy_t *policy;
+	knot_dnssec_policy_t *policy;
 	changeset_t *changeset;
 	hattrie_t *signed_tree;
 } changeset_signing_data_t;
@@ -1068,6 +1069,32 @@ static int rr_already_signed(const knot_rrset_t *rrset, hattrie_t *t,
 	return KNOT_EOK;
 }
 
+static inline uint32_t batch_lifetime(knot_dnssec_policy_t *policy)
+{
+	/* Batch is counted from 1. */
+	return policy->first_batch + (policy->batch_nr - 1) *
+	                (policy->sign_lifetime / policy->batch_count);
+}
+
+static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
+{
+	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
+		const uint16_t type_covered =
+			knot_rrsig_type_covered(&rrsigs->rrs, i);
+		if (type_covered == type) {
+			return knot_rrsig_sig_expiration(&rrsigs->rrs, i);
+		}
+	}
+
+	return 0;
+}
+
+static inline void next_batch(knot_dnssec_policy_t *policy)
+{
+	/* Batch is counted from 1. 0 means no batch was yet assigned. */
+	policy->batch_nr = (policy->batch_nr % policy->batch_count) + 1;
+}
+
 /*!
  * \brief Wrapper function for changeset signing - to be used with changeset
  *        apply functions.
@@ -1077,7 +1104,8 @@ static int rr_already_signed(const knot_rrset_t *rrset, hattrie_t *t,
  *
  * \return Error code, KNOT_EOK if successful.
  */
-static int sign_changeset_wrap(knot_rrset_t *chg_rrset, changeset_signing_data_t *args)
+static int sign_changeset_wrap(knot_rrset_t *chg_rrset,
+                               changeset_signing_data_t *args)
 {
 	// Find RR's node in zone, find out if we need to sign this RR
 	const zone_node_t *node =
@@ -1093,6 +1121,31 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset, changeset_signing_data_t
 		                                             &should_sign);
 		if (ret != KNOT_EOK) {
 			return ret;
+		}
+
+		// Check if such name+type is in the old zone
+		const zone_node_t *old_node = zone_contents_find_node(
+		                              args->old_zone, chg_rrset->owner);
+		knot_rrset_t old_rrset = { 0 };
+		if (old_node) {
+			 old_rrset = node_rrset(old_node, chg_rrset->type);
+		}
+
+		if (!old_node || old_rrset.type != chg_rrset->type) {
+			// New RRSet => move to next batch, counted from 1. */
+			next_batch(args->policy);
+			args->policy->cur_batch = batch_lifetime(args->policy);
+		} else {
+			// RRSet already in zone, retain its batch
+			assert(rrsigs.owner != NULL);
+			uint32_t rrsig_ex = expiration(&rrsigs, chg_rrset->type);
+			assert(rrsig_ex != 0);
+			args->policy->cur_batch = rrsig_ex - args->policy->now;
+			/* TODO[jitter] Remove this assert. */
+			assert(args->policy->first_batch == 0
+			       || (args->policy->cur_batch - args->policy->first_batch)
+			          % (args->policy->sign_lifetime / args->policy->batch_count)
+			          == 0);
 		}
 
 		// Check for RRSet in the 'already_signed' table
@@ -1111,10 +1164,10 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset, changeset_signing_data_t
 		}
 
 		if (should_sign) {
-			return force_resign_rrset(&zone_rrset, &rrsigs,
-			                          args->zone_keys,
-			                          args->policy,
-			                          args->changeset);
+			ret = force_resign_rrset(&zone_rrset, &rrsigs,
+			                         args->zone_keys,
+			                         args->policy,
+			                         args->changeset);
 		} else {
 			/*
 			 * If RRSet in zone DOES have RRSIGs although we
@@ -1321,7 +1374,8 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 /*!
  * \brief Sign changeset created by DDNS or zone-diff.
  */
-int knot_zone_sign_changeset(const zone_contents_t *zone,
+int knot_zone_sign_changeset(const zone_contents_t *old_zone,
+                             const zone_contents_t *zone,
                              const changeset_t *in_ch,
                              changeset_t *out_ch,
                              const knot_zone_keys_t *zone_keys,
@@ -1333,6 +1387,7 @@ int knot_zone_sign_changeset(const zone_contents_t *zone,
 
 	// Create args for wrapper function - hattrie for duplicate sigs
 	changeset_signing_data_t args = {
+		.old_zone = old_zone,
 		.zone = zone,
 		.zone_keys = zone_keys,
 		.policy = policy,

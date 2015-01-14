@@ -36,13 +36,20 @@ typedef enum knot_update_serial {
 
 typedef struct {
 	uint32_t now;               //! Current time.
-	uint32_t refresh_before;    //! Refresh signatures expiring before to this time.
+	uint32_t refresh_before;    //! Refresh signatures expiring before this time.
 	uint32_t sign_lifetime;     //! Signature life time.
+	uint32_t batch_count;       //! Count of signing batches.
+	uint32_t batch_nr;          //! Current batch number. Counted from 1.
+	uint32_t first_batch;       //! Lifetime of the first batch.
+	uint32_t cur_batch;         //! Lifetime of the current batch.
 	bool forced_sign;           //! Drop valid signatures as well.
 	knot_update_serial_t soa_up;//! Policy for serial updating.
 } knot_dnssec_policy_t;
 
-#define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000
+#define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000	// 30 days
+#define KNOT_DNSSEC_DEFAULT_BATCH_COUNT 10	// one batch every 3 days
+#define KNOT_DNSSEC_MIN_BATCH_INTERVAL 259200	// 3 days
+#define KNOT_DNSSEC_MIN_REFRESH 86400		// 1 day
 
 /*!
  * \brief Initialize default signing policy.

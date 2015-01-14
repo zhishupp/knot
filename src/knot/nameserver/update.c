@@ -82,8 +82,8 @@ static int sign_update(zone_t *zone, const zone_contents_t *old_contents,
 		                            &refresh_at);
 	} else {
 		// Sign the created changeset
-		ret = knot_dnssec_sign_changeset(new_contents, zone->conf,
-		                                 ddns_ch, sec_ch,
+		ret = knot_dnssec_sign_changeset(old_contents, new_contents,
+		                                 zone->conf, ddns_ch, sec_ch,
 		                                 &refresh_at);
 	}
 	if (ret != KNOT_EOK) {

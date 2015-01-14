@@ -254,6 +254,9 @@ static int rrsigs_create_rdata(knot_rrset_t *rrsigs,
 	                            knot_rdata_ttl(covered_data), NULL);
 }
 
+/* TODO[jitter]: policy cannot be const.
+ *               maybe separate the batch info to separate parameter.
+ */
 _public_
 int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
                     const knot_dnssec_key_t *key,
@@ -267,11 +270,22 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 		return KNOT_EINVAL;
 	}
 
+	/* Note: Both BIND and OpenDNSSEC use some inception offset. */
 	uint32_t sig_incept = policy->now;
-	uint32_t sig_expire = sig_incept + policy->sign_lifetime;
+	uint32_t sig_expire = sig_incept;
 
-	return rrsigs_create_rdata(rrsigs, sign_ctx, covered, key, sig_incept,
-	                           sig_expire);
+	if (policy->cur_batch > 0) {
+		sig_expire += policy->cur_batch;
+	} else {
+		/* TODO[jitter] Remove this assert. */
+		//assert(0);
+		sig_expire += policy->sign_lifetime;
+	}
+
+	int ret = rrsigs_create_rdata(rrsigs, sign_ctx, covered, key, sig_incept,
+	                              sig_expire);
+
+	return ret;
 }
 
 _public_
