@@ -238,16 +238,6 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 		return ret;
 	}
 
-	// Sign added NSEC(3)
-	ret = knot_zone_sign_nsecs_in_changeset(old_zone, &zone_keys, &policy,
-	                                        out_ch);
-	if (ret != KNOT_EOK) {
-		log_zone_error(zone_name, "DNSSEC, failed to sign changeset (%s)",
-		               knot_strerror(ret));
-		knot_free_zone_keys(&zone_keys);
-		return ret;
-	}
-
 	// Update SOA RRSIGs
 	knot_rrset_t soa = node_rrset(zone->apex, KNOT_RRTYPE_SOA);
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);

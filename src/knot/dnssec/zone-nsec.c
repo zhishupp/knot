@@ -287,12 +287,10 @@ int knot_zone_create_nsec_chain(const zone_contents_t *zone,
 		result = mark_removed_nsec3(changeset, zone);
 	}
 
-	return result;
+	if (result != KNOT_EOK) {
+		return result;
+	}
 
-//	if (result != KNOT_EOK) {
-//		return result;
-//	}
-
-//	// Sign newly created records right away
-//	return knot_zone_sign_nsecs_in_changeset(zone_keys, policy, changeset);
+	// Sign newly created records right away
+	return knot_zone_sign_nsecs_in_changeset(zone_keys, policy, changeset);
 }
