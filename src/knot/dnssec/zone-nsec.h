@@ -82,6 +82,7 @@ knot_dname_t *knot_create_nsec3_owner(const knot_dname_t *owner,
 int knot_zone_create_nsec_chain(const zone_contents_t *zone,
                                 changeset_t *changeset,
                                 const knot_zone_keys_t *zone_keys,
-                                const knot_dnssec_policy_t *policy);
+                                const knot_dnssec_policy_t *policy,
+                                uint32_t *min_expire);
 
 /*! @} */

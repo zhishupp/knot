@@ -261,7 +261,8 @@ _public_
 int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
                     const knot_dnssec_key_t *key,
                     knot_dnssec_sign_context_t *sign_ctx,
-                    const knot_dnssec_policy_t *policy)
+                    const knot_dnssec_policy_t *policy,
+                    uint32_t *min_expire)
 {
 	if (knot_rrset_empty(covered) || !key || !sign_ctx || !policy ||
 	    rrsigs->type != KNOT_RRTYPE_RRSIG ||
@@ -284,6 +285,10 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 
 	int ret = rrsigs_create_rdata(rrsigs, sign_ctx, covered, key, sig_incept,
 	                              sig_expire);
+
+	if (sig_expire < *min_expire) {
+		*min_expire = sig_expire;
+	}
 
 	return ret;
 }

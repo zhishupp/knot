@@ -61,7 +61,7 @@ typedef struct signed_info {
 int knot_zone_sign(const zone_contents_t *zone,
                    const knot_zone_keys_t *zone_keys,
                    const knot_dnssec_policy_t *policy,
-                   changeset_t *out_ch, uint32_t *refresh_at);
+                   changeset_t *out_ch, uint32_t *min_expire);
 
 /*!
  * \brief Update and sign SOA and store performed changes in changeset.
@@ -76,7 +76,8 @@ int knot_zone_sign(const zone_contents_t *zone,
 int knot_zone_sign_update_soa(const knot_rrset_t *soa, const knot_rrset_t *rrsigs,
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
-                              uint32_t new_serial, changeset_t *changeset);
+                              uint32_t new_serial, changeset_t *changeset,
+                              uint32_t *min_expire);
 
 /*!
  * \brief Check if zone SOA signatures are expired.
@@ -103,12 +104,12 @@ bool knot_zone_sign_soa_expired(const zone_contents_t *zone,
  *
  * \return Error code, KNOT_EOK if successful.
  */
-int knot_zone_sign_changeset(const zone_contents_t *old_zone,
-                             const zone_contents_t *zone,
+int knot_zone_sign_changeset(const zone_contents_t *zone,
                              const changeset_t *in_ch,
                              changeset_t *out_ch,
                              const knot_zone_keys_t *zone_keys,
-                             const knot_dnssec_policy_t *policy);
+                             const knot_dnssec_policy_t *policy,
+                             uint32_t *min_expire);
 
 /*!
  * \brief Sign NSEC/NSEC3 nodes in changeset and update the changeset.
@@ -119,10 +120,11 @@ int knot_zone_sign_changeset(const zone_contents_t *old_zone,
  *
  * \return Error code, KNOT_EOK if successful.
  */
-int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *old_zone,
+int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *zone,
                                       const knot_zone_keys_t *zone_keys,
                                       const knot_dnssec_policy_t *policy,
-                                      changeset_t *changeset);
+                                      changeset_t *changeset,
+                                      uint32_t *min_expire);
 
 /*!
  * \brief Checks whether RRSet in a node has to be signed. Will not return

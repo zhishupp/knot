@@ -258,7 +258,8 @@ knot_dname_t *knot_nsec3_hash_to_dname(const uint8_t *hash, size_t hash_size,
 int knot_zone_create_nsec_chain(const zone_contents_t *zone,
                                 changeset_t *changeset,
                                 const knot_zone_keys_t *zone_keys,
-                                const knot_dnssec_policy_t *policy)
+                                const knot_dnssec_policy_t *policy,
+                                uint32_t *min_expire)
 {
 	if (!zone || !changeset) {
 		return KNOT_EINVAL;
@@ -292,5 +293,6 @@ int knot_zone_create_nsec_chain(const zone_contents_t *zone,
 	}
 
 	// Sign newly created records right away
-	return knot_zone_sign_nsecs_in_changeset(zone_keys, policy, changeset);
+	return knot_zone_sign_nsecs_in_changeset(zone, zone_keys, policy,
+	                                         changeset, min_expire);
 }

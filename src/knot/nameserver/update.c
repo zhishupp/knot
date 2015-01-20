@@ -60,12 +60,10 @@ static bool apex_rr_changed(const zone_contents_t *old_contents,
 	return !knot_rrset_equal(&old_rr, &new_rr, KNOT_RRSET_COMPARE_WHOLE);
 }
 
-static int sign_update(zone_t *zone, const zone_contents_t *old_contents,
-                       zone_contents_t *new_contents, changeset_t *ddns_ch,
-                       changeset_t *sec_ch)
+static int sign_update(zone_t *zone, zone_contents_t *new_contents,
+                       changeset_t *ddns_ch, changeset_t *sec_ch)
 {
 	assert(zone != NULL);
-	assert(old_contents != NULL);
 	assert(new_contents != NULL);
 	assert(ddns_ch != NULL);
 
@@ -75,16 +73,15 @@ static int sign_update(zone_t *zone, const zone_contents_t *old_contents,
 	 */
 	int ret = KNOT_EOK;
 	uint32_t refresh_at = 0;
-	if (apex_rr_changed(old_contents, new_contents, KNOT_RRTYPE_DNSKEY) ||
-	    apex_rr_changed(old_contents, new_contents, KNOT_RRTYPE_NSEC3PARAM)) {
+	if (apex_rr_changed(zone->contents, new_contents, KNOT_RRTYPE_DNSKEY) ||
+	    apex_rr_changed(zone->contents, new_contents, KNOT_RRTYPE_NSEC3PARAM)) {
 		ret = knot_dnssec_zone_sign(new_contents, zone->conf,
 		                            sec_ch, KNOT_SOA_SERIAL_KEEP,
 		                            &refresh_at);
 	} else {
 		// Sign the created changeset
-		ret = knot_dnssec_sign_changeset(old_contents, new_contents,
-		                                 zone->conf, ddns_ch, sec_ch,
-		                                 &refresh_at);
+		ret = knot_dnssec_sign_changeset(new_contents, zone->conf,
+		                                 ddns_ch, sec_ch, &refresh_at);
 	}
 	if (ret != KNOT_EOK) {
 		return ret;
@@ -105,6 +102,10 @@ static int sign_update(zone_t *zone, const zone_contents_t *old_contents,
 
 	// Plan next zone resign.
 	const time_t resign_time = zone_events_get_time(zone, ZONE_EVENT_DNSSEC);
+	/* TODO[jitter] Resign time is relative or absolute?
+	 *              refresh_at is relative or absolute?
+	 *              In other cases this is scheduled via schedule_dnssec().
+	 */
 	if (time(NULL) + refresh_at < resign_time) {
 		zone_events_schedule(zone, ZONE_EVENT_DNSSEC, refresh_at);
 	}
@@ -244,8 +245,7 @@ static int process_normal(zone_t *zone, list_t *requests)
 			set_rcodes(requests, KNOT_RCODE_SERVFAIL);
 			return ret;
 		}
-		ret = sign_update(zone, zone->contents, new_contents, &ddns_ch,
-		                  &sec_ch);
+		ret = sign_update(zone, new_contents, &ddns_ch, &sec_ch);
 		if (ret != KNOT_EOK) {
 			update_rollback(&ddns_ch);
 			update_free_zone(&new_contents);

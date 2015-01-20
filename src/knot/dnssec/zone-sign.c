@@ -288,7 +288,7 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
                               const knot_rrset_t *rrsigs,
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
-                              changeset_t *changeset)
+                              changeset_t *changeset, uint32_t *min_expire)
 {
 	assert(!knot_rrset_empty(covered));
 	assert(zone_keys);
@@ -315,7 +315,7 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
 		}
 
 		result = knot_sign_rrset(&to_add, covered, &key->dnssec_key,
-		                         key->context, policy);
+		                         key->context, policy, min_expire);
 		if (result != KNOT_EOK) {
 			break;
 		}
@@ -375,7 +375,7 @@ static int force_resign_rrset(const knot_rrset_t *covered,
                               const knot_rrset_t *rrsigs,
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
-                              changeset_t *changeset)
+                              changeset_t *changeset, uint32_t *min_expire)
 {
 	assert(!knot_rrset_empty(covered));
 
@@ -387,7 +387,8 @@ static int force_resign_rrset(const knot_rrset_t *covered,
 		}
 	}
 
-	return add_missing_rrsigs(covered, NULL, zone_keys, policy, changeset);
+	return add_missing_rrsigs(covered, NULL, zone_keys, policy, changeset,
+	                          min_expire);
 }
 
 /*!
@@ -406,7 +407,7 @@ static int resign_rrset(const knot_rrset_t *covered,
                         const knot_zone_keys_t *zone_keys,
                         const knot_dnssec_policy_t *policy,
                         changeset_t *changeset,
-                        uint32_t *expires_at)
+                        uint32_t *min_expire)
 {
 	assert(!knot_rrset_empty(covered));
 
@@ -418,13 +419,13 @@ static int resign_rrset(const knot_rrset_t *covered,
 	// and we create all the signatures twice, that is not cool I think.
 
 	int result = remove_expired_rrsigs(covered, rrsigs, zone_keys,
-	                                   policy, changeset, expires_at);
+	                                   policy, changeset, min_expire);
 	if (result != KNOT_EOK) {
 		return result;
 	}
 
 	return add_missing_rrsigs(covered, rrsigs, zone_keys, policy,
-	                          changeset);
+	                          changeset, min_expire);
 }
 
 static int remove_standalone_rrsigs(const zone_node_t *node,
@@ -470,6 +471,11 @@ static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
 	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
 		const uint16_t type_covered =
 			knot_rrsig_type_covered(&rrsigs->rrs, i);
+		/* TODO[jitter] This does not distinguish between signatures
+		 *              made by different keys!
+		 *              But they might be the same, as the batch is
+		 *              set per-RRSet.
+		 */
 		if (type_covered == type) {
 			return knot_rrsig_sig_expiration(&rrsigs->rrs, i);
 		}
@@ -500,13 +506,21 @@ static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
 		// No old RRSIGs => move to next batch, counted from 1. */
 		next_batch(policy);
 		policy->cur_batch = batch_lifetime(policy);
+		printf("No RRSIGs => next batch #: %u, lifetime: %u\n",
+		       policy->batch_nr, policy->cur_batch);
 	} else {
 		// RRSet already in zone, retain its batch
 		policy->cur_batch = rrsig_ex - policy->now;
+		printf("Existing RRSIGs => reusing batch...");
+
 		// If expired, extend by whole lifetime
 		if (rrsig_ex <= policy->refresh_before) {
+			printf("Expired RRSIG...");
 			policy->cur_batch += policy->sign_lifetime;
 		}
+
+		printf("Batch lifetime: %u\n", policy->cur_batch);
+
 		/* TODO[jitter] Remove this assert. */
 		assert(policy->first_batch == 0
 		       || (policy->cur_batch - policy->first_batch)
@@ -534,6 +548,12 @@ static void assign_batch(const zone_contents_t *old_zone,
 		 old_rrsigs = node_rrset(old_node, KNOT_RRTYPE_RRSIG);
 	}
 
+	char name[255];
+	char type[10];
+	knot_dname_to_str(name, chg_rrset->owner, 255);
+	knot_rrtype_to_string(chg_rrset->type, type, 10);
+	printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
+
 	assign_batch_for_rrset(policy, &old_rrsigs, chg_rrset->type);
 }
 
@@ -552,7 +572,7 @@ static int sign_node_rrsets(const zone_node_t *node,
                             const knot_zone_keys_t *zone_keys,
                             const knot_dnssec_policy_t *policy,
                             changeset_t *changeset,
-                            uint32_t *expires_at)
+                            uint32_t *min_expire)
 {
 	assert(node);
 	assert(policy);
@@ -575,14 +595,20 @@ static int sign_node_rrsets(const zone_node_t *node,
 			continue;
 		}
 
+		char name[255];
+		char type[10];
+		knot_dname_to_str(name, rrset.owner, 255);
+		knot_rrtype_to_string(rrset.type, type, 10);
+		printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
+
 		assign_batch_for_rrset(policy, &rrsigs, rrset.type);
 
 		if (policy->forced_sign) {
 			result = force_resign_rrset(&rrset, &rrsigs, zone_keys,
-			                            policy, changeset);
+			                         policy, changeset, min_expire);
 		} else {
 			result = resign_rrset(&rrset, &rrsigs, zone_keys, policy,
-			                      changeset, expires_at);
+			                      changeset, min_expire);
 		}
 
 		if (result != KNOT_EOK) {
@@ -677,6 +703,7 @@ typedef struct {
 	knot_dnssec_policy_t *policy;
 	changeset_t *changeset;
 	hattrie_t *signed_tree;
+	uint32_t *min_expire;
 } changeset_signing_data_t;
 
 
@@ -914,7 +941,7 @@ static int update_dnskeys_rrsigs(const knot_rrset_t *dnskeys,
                                  const knot_rrset_t *soa,
                                  const knot_zone_keys_t *zone_keys,
                                  const knot_dnssec_policy_t *policy,
-                                 changeset_t *changeset)
+                                 changeset_t *changeset, uint32_t *min_expire)
 {
 	assert(zone_keys);
 	assert(changeset);
@@ -960,8 +987,11 @@ static int update_dnskeys_rrsigs(const knot_rrset_t *dnskeys,
 		}
 	}
 
+	printf("Assigning batch for DNSKEYs\n");
+	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_DNSKEY);
+
 	result = add_missing_rrsigs(&new_dnskeys, NULL, zone_keys, policy,
-	                            changeset);
+	                            changeset, min_expire);
 	if (result != KNOT_EOK) {
 		goto fail;
 	}
@@ -990,7 +1020,7 @@ fail:
 static int update_dnskeys(const zone_contents_t *zone,
                           const knot_zone_keys_t *zone_keys,
                           const knot_dnssec_policy_t *policy,
-                          changeset_t *changeset)
+                          changeset_t *changeset, uint32_t *min_expire)
 {
 	assert(zone);
 	assert(zone->apex);
@@ -1037,7 +1067,8 @@ static int update_dnskeys(const zone_contents_t *zone,
 	}
 
 	dbg_dnssec_detail("Creating new signatures for DNSKEYs\n");
-	return update_dnskeys_rrsigs(&dnskeys, &rrsigs, &soa, zone_keys, policy, changeset);
+	return update_dnskeys_rrsigs(&dnskeys, &rrsigs, &soa, zone_keys, policy,
+	                             changeset, min_expire);
 }
 
 /*!
@@ -1178,7 +1209,13 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset,
 			return ret;
 		}
 
-		assign_batch(args->old_zone, chg_rrset, args->policy);
+		char name[255];
+		char type[10];
+		knot_dname_to_str(name, chg_rrset->owner, 255);
+		knot_rrtype_to_string(chg_rrset->type, type, 10);
+		printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
+
+		assign_batch_for_rrset(args->policy, &rrsigs, chg_rrset->type);
 
 		// Check for RRSet in the 'already_signed' table
 		if (args->signed_tree && (should_sign && knot_rrset_empty(&zone_rrset))) {
@@ -1199,7 +1236,8 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset,
 			ret = force_resign_rrset(&zone_rrset, &rrsigs,
 			                         args->zone_keys,
 			                         args->policy,
-			                         args->changeset);
+			                         args->changeset,
+			                         args->min_expire);
 		} else {
 			/*
 			 * If RRSet in zone DOES have RRSIGs although we
@@ -1260,16 +1298,15 @@ static void knot_zone_clear_sorted_changes(hattrie_t *t)
 int knot_zone_sign(const zone_contents_t *zone,
                    const knot_zone_keys_t *zone_keys,
                    const knot_dnssec_policy_t *policy,
-                   changeset_t *changeset,
-                   uint32_t *refresh_at)
+                   changeset_t *changeset, uint32_t *min_expire)
 {
-	if (!zone || !zone_keys || !policy || !changeset || !refresh_at) {
+	if (!zone || !zone_keys || !policy || !changeset || !min_expire) {
 		return KNOT_EINVAL;
 	}
 
 	int result;
 
-	result = update_dnskeys(zone, zone_keys, policy, changeset);
+	result = update_dnskeys(zone, zone_keys, policy, changeset, min_expire);
 	if (result != KNOT_EOK) {
 		dbg_dnssec_detail("update_dnskeys() failed\n");
 		return result;
@@ -1291,18 +1328,7 @@ int knot_zone_sign(const zone_contents_t *zone,
 		return result;
 	}
 
-	// renew the signatures a little earlier
-	uint32_t expiration = MIN(normal_tree_expiration, nsec3_tree_expiration);
-
-	// DNSKEY updates
-	uint32_t dnskey_update = knot_get_next_zone_key_event(zone_keys);
-	if (expiration < dnskey_update) {
-		// Signatures expire before keys do
-		*refresh_at = knot_dnssec_policy_refresh_time(policy, expiration);
-	} else {
-		// Keys expire before signatures
-		*refresh_at = dnskey_update;
-	}
+	*min_expire = MIN(normal_tree_expiration, nsec3_tree_expiration);
 
 	return KNOT_EOK;
 }
@@ -1332,7 +1358,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
                               uint32_t new_serial,
-                              changeset_t *changeset)
+                              changeset_t *changeset, uint32_t *min_expire)
 {
 	if (knot_rrset_empty(soa) || !zone_keys || !policy || !changeset) {
 		return KNOT_EINVAL;
@@ -1388,7 +1414,8 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 
 	// add signatures for new SOA
 
-	result = add_missing_rrsigs(soa_to, NULL, zone_keys, policy, changeset);
+	result = add_missing_rrsigs(soa_to, NULL, zone_keys, policy, changeset,
+	                            min_expire);
 	if (result != KNOT_EOK) {
 		knot_rrset_free(&soa_from, NULL);
 		knot_rrset_free(&soa_to, NULL);
@@ -1409,12 +1436,12 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 /*!
  * \brief Sign changeset created by DDNS or zone-diff.
  */
-int knot_zone_sign_changeset(const zone_contents_t *old_zone,
-                             const zone_contents_t *zone,
+int knot_zone_sign_changeset(const zone_contents_t *zone,
                              const changeset_t *in_ch,
                              changeset_t *out_ch,
                              const knot_zone_keys_t *zone_keys,
-                             const knot_dnssec_policy_t *policy)
+                             const knot_dnssec_policy_t *policy,
+                             uint32_t *min_expire)
 {
 	if (zone == NULL || in_ch == NULL || out_ch == NULL) {
 		return KNOT_EINVAL;
@@ -1422,12 +1449,12 @@ int knot_zone_sign_changeset(const zone_contents_t *old_zone,
 
 	// Create args for wrapper function - hattrie for duplicate sigs
 	changeset_signing_data_t args = {
-		.old_zone = old_zone,
 		.zone = zone,
 		.zone_keys = zone_keys,
 		.policy = policy,
 		.changeset = out_ch,
-		.signed_tree = hattrie_create()
+		.signed_tree = hattrie_create(),
+		.min_expire = min_expire
 	};
 
 	if (args.signed_tree == NULL) {
@@ -1457,10 +1484,11 @@ int knot_zone_sign_changeset(const zone_contents_t *old_zone,
 /*!
  * \brief Sign NSEC/NSEC3 nodes in changeset and update the changeset.
  */
-int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *old_zone,
+int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *zone,
                                       const knot_zone_keys_t *zone_keys,
                                       const knot_dnssec_policy_t *policy,
-                                      changeset_t *changeset)
+                                      changeset_t *changeset,
+                                      uint32_t *min_expire)
 {
 	assert(zone_keys);
 	assert(policy);
@@ -1473,9 +1501,13 @@ int knot_zone_sign_nsecs_in_changeset(const zone_contents_t *old_zone,
 	while (!knot_rrset_empty(&rr)) {
 		if (rr.type == KNOT_RRTYPE_NSEC ||
 		    rr.type == KNOT_RRTYPE_NSEC3) {
-			assign_batch(old_zone, &rr, policy);
+			/* We may use new zone contents, as the old RRSIGs
+			 * were not yet removed.
+			 */
+			assign_batch(zone, &rr, policy);
 			int ret = add_missing_rrsigs(&rr, NULL, zone_keys,
-			                             policy, changeset);
+			                             policy, changeset,
+			                             min_expire);
 			if (ret != KNOT_EOK) {
 				changeset_iter_clear(&itt);
 				return ret;

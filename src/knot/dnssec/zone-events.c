@@ -84,9 +84,10 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	// Get the time of the first batch in the zone
 	policy->first_batch = get_first_batch(policy, zone);
 
-	printf("Initialized policy: batch count: %u, lifetime: %u, "
-	       "refresh before: %u, first batch: %u\n", policy->batch_count,
-	       policy->sign_lifetime, policy->refresh_before,
+	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "
+	       "refresh before: %u (relative: %u), first batch: %u\n",
+	       policy->batch_count, policy->sign_lifetime, policy->now,
+	       policy->refresh_before, policy->refresh_before - policy->now,
 	       policy->first_batch);
 
 	return KNOT_EOK;
@@ -117,8 +118,11 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		return result;
 	}
 
+	uint32_t min_expire = policy.sign_lifetime;
+
 	// generate NSEC records
-	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy);
+	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy,
+	                                     &min_expire);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to create NSEC(3) chain (%s)",
 		               knot_strerror(result));
@@ -129,7 +133,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	                changeset_empty(out_ch));
 
 	// add missing signatures
-	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch, refresh_at);
+	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch, &min_expire);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign the zone (%s)",
 		               knot_strerror(result));
@@ -153,7 +157,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	assert(!knot_rrset_empty(&soa));
 	result = knot_zone_sign_update_soa(&soa, &rrsigs, &zone_keys, &policy,
-	                                   new_serial, out_ch);
+	                                   new_serial, out_ch, &min_expire);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, not signing, failed to update "
 		               "SOA record (%s)", knot_strerror(result));
@@ -161,9 +165,29 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		return result;
 	}
 
+	// DNSKEY updates
+	/* TODO[jitter] Shouldn't this be done also in the changeset signing?
+	 *              Probably not, DNSKEYs are updated only here...?
+	 */
+	uint32_t dnskey_update = knot_get_next_zone_key_event(&zone_keys);
+	if (min_expire < dnskey_update) {
+		// Signatures expire before keys do
+		assert(policy.first_batch != 0);
+		printf("First batch: %u, min expire: %u\n", policy.first_batch,
+		       min_expire - policy.now);
+		assert(min_expire <= policy.now + policy.first_batch);
+		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
+	} else {
+		printf("Keys expire before signatures: %u\n", dnskey_update);
+		// Keys expire before signatures
+		*refresh_at = dnskey_update;
+	}
+
+	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,
+	       *refresh_at - policy.now);
+
 	knot_free_zone_keys(&zone_keys);
-	dbg_dnssec_detail("zone signed: changes=%zu\n",
-	                  changeset_size(out_ch));
+	dbg_dnssec_detail("zone signed: changes=%zu\n", changeset_size(out_ch));
 
 	log_zone_info(zone_name, "DNSSEC, successfully signed");
 
@@ -192,8 +216,7 @@ int knot_dnssec_zone_sign_force(zone_contents_t *zone, const conf_zone_t *zone_c
 	                 refresh_at);
 }
 
-int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
-                               const zone_contents_t *zone,
+int knot_dnssec_sign_changeset(const zone_contents_t *zone,
                                conf_zone_t *zone_config,
                                const changeset_t *in_ch,
                                changeset_t *out_ch,
@@ -219,9 +242,11 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 		return ret;
 	}
 
+	uint32_t min_expire = policy.sign_lifetime;
+
 	// Sign added and removed RRSets in changeset
-	ret = knot_zone_sign_changeset(old_zone, zone, in_ch, out_ch,
-	                               &zone_keys, &policy);
+	ret = knot_zone_sign_changeset(zone, in_ch, out_ch,
+	                               &zone_keys, &policy, &min_expire);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign changeset (%s)",
 		               knot_strerror(ret));
@@ -230,7 +255,8 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 	}
 
 	// Create NSEC(3) chain
-	ret = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy);
+	ret = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy,
+	                                  &min_expire);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to create NSEC(3) chain (%s)",
 		               knot_strerror(ret));
@@ -242,7 +268,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 	knot_rrset_t soa = node_rrset(zone->apex, KNOT_RRTYPE_SOA);
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	ret = knot_zone_sign_update_soa(&soa, &rrsigs, &zone_keys, &policy,
-	                                new_serial, out_ch);
+	                                new_serial, out_ch, &min_expire);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign SOA record (%s)",
 		               knot_strerror(ret));
@@ -252,12 +278,20 @@ int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
 
 	knot_free_zone_keys(&zone_keys);
 
-	/* TODO: Maybe do not plan any resign, resigning of the next batch
-	 *       should be already planned.
+	/* TODO[jitter]: Maybe do not plan any resign, resigning of the next
+	 *               batch should be already planned.
+	 * TODO[jitter]: Maybe we don't need the earliest expiration? First
+	 *               batch time is the earliest? It should be, everything
+	 *               before that should have been resigned, but is there a
+	 *               way to ensure that? What if the parameters' values
+	 *               change?
 	 */
 	assert(policy.first_batch != 0);
-	*refresh_at = knot_dnssec_policy_refresh_time(&policy,
-	                                       policy.now + policy.first_batch);
+	assert(min_expire <= policy.first_batch);
+	*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
+
+	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,
+	       *refresh_at - policy.now);
 
 	return KNOT_EOK;
 }

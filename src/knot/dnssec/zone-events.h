@@ -57,9 +57,9 @@ int knot_dnssec_zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
  *
  * \return Error code, KNOT_EOK if successful.
  */
-int knot_dnssec_zone_sign_force(zone_contents_t *zone, const conf_zone_t *zone_config,
-                                changeset_t *out_ch,
-                                uint32_t *refresh_at);
+int knot_dnssec_zone_sign_force(zone_contents_t *zone,
+                                const conf_zone_t *zone_config,
+                                changeset_t *out_ch, uint32_t *refresh_at);
 
 /*!
  * \brief Sign changeset created by DDNS or zone-diff.
@@ -72,8 +72,7 @@ int knot_dnssec_zone_sign_force(zone_contents_t *zone, const conf_zone_t *zone_c
  *
  * \return Error code, KNOT_EOK if successful.
  */
-int knot_dnssec_sign_changeset(const zone_contents_t *old_zone,
-                               const zone_contents_t *zone,
+int knot_dnssec_sign_changeset(const zone_contents_t *zone,
                                conf_zone_t *zone_config,
                                const changeset_t *in_ch,
                                changeset_t *out_ch,

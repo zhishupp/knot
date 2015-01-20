@@ -75,7 +75,7 @@ int knot_sign_rrset(knot_rrset_t *rrsigs,
                     const knot_rrset_t *covered,
                     const knot_dnssec_key_t *key,
                     knot_dnssec_sign_context_t *sign_ctx,
-                    const knot_dnssec_policy_t *policy);
+                    const knot_dnssec_policy_t *policy, uint32_t *min_expire);
 
 /*!
  * \brief Creates new RRS using \a rrsig_rrs as a source. Only those RRs that
