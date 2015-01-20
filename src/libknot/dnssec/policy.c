@@ -69,10 +69,6 @@ void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
 		}
 	}
 
-	/* TODO[jitter] If lifetime is less than MIN_BATCH or something like
-	 *              that, the resigning enters an infinite loop.
-	 */
-
 	/* Resign only signatures from the next batch. */
 	policy->refresh_before = policy->now + sign_lifetime / policy->batch_count;
 }

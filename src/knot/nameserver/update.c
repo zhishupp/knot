@@ -102,10 +102,6 @@ static int sign_update(zone_t *zone, zone_contents_t *new_contents,
 
 	// Plan next zone resign.
 	const time_t resign_time = zone_events_get_time(zone, ZONE_EVENT_DNSSEC);
-	/* TODO[jitter] Resign time is relative or absolute?
-	 *              refresh_at is relative or absolute?
-	 *              In other cases this is scheduled via schedule_dnssec().
-	 */
 	if (time(NULL) + refresh_at < resign_time) {
 		zone_events_schedule(zone, ZONE_EVENT_DNSSEC, refresh_at);
 	}
