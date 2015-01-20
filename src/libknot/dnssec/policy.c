@@ -18,6 +18,8 @@
 #include <string.h>
 #include <time.h>
 
+#include <stdio.h>
+
 #include "libknot/dnssec/policy.h"
 #include "libknot/internal/macros.h"
 
@@ -29,10 +31,16 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 		return 0;
 	}
 
-	uint32_t signature_safety = policy->sign_lifetime / 10;
-	signature_safety = MAX(signature_safety, KNOT_DNSSEC_MIN_REFRESH);
+	printf("Counting refresh time. Earliest expiration: %u.\n",
+	       earliest_expiration - policy->now);
 
-	if (earliest_expiration <= signature_safety) {
+	uint32_t signature_safety = policy->sign_lifetime / 10;
+
+	if (policy->sign_lifetime > 2 * KNOT_DNSSEC_MIN_REFRESH) {
+		signature_safety = MAX(signature_safety, KNOT_DNSSEC_MIN_REFRESH);
+	}
+
+	if (earliest_expiration - policy->now <= signature_safety) {
 		return 0;
 	}
 
@@ -56,7 +64,14 @@ void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
 	/* Batches must have some minimal interval between them. */
 	if (sign_lifetime / policy->batch_count < KNOT_DNSSEC_MIN_BATCH_INTERVAL) {
 		policy->batch_count = sign_lifetime / KNOT_DNSSEC_MIN_BATCH_INTERVAL;
+		if (policy->batch_count == 0) {
+			policy->batch_count = 1;
+		}
 	}
+
+	/* TODO[jitter] If lifetime is less than MIN_BATCH or something like
+	 *              that, the resigning enters an infinite loop.
+	 */
 
 	/* Resign only signatures from the next batch. */
 	policy->refresh_before = policy->now + sign_lifetime / policy->batch_count;

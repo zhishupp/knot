@@ -48,7 +48,7 @@ typedef struct {
 
 #define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000	// 30 days
 #define KNOT_DNSSEC_DEFAULT_BATCH_COUNT 10	// one batch every 3 days
-#define KNOT_DNSSEC_MIN_BATCH_INTERVAL 259200	// 3 days
+#define KNOT_DNSSEC_MIN_BATCH_INTERVAL 86400 //1 day; 259200	// 3 days
 #define KNOT_DNSSEC_MIN_REFRESH 86400		// 1 day
 
 /*!
