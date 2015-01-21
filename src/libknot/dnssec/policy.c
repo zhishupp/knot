@@ -34,6 +34,9 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 	printf("Counting refresh time. Earliest expiration: %u.\n",
 	       earliest_expiration - policy->now);
 
+	/* TODO[jitter] This must be counted from batch interval probably.
+	 *              Otherwise it may be larger than batch.
+	 */
 	uint32_t signature_safety = policy->sign_lifetime / 10;
 
 	if (policy->sign_lifetime > 2 * KNOT_DNSSEC_MIN_REFRESH) {
@@ -51,40 +54,42 @@ _public_
 void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
                                           uint32_t sign_lifetime)
 {
-	if (policy == NULL) {
+	if (policy == NULL || policy->batch == NULL) {
 		return;
 	}
 
 	policy->sign_lifetime = sign_lifetime;
 
-	if (policy->batch_count == 0) {
-		policy->batch_count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
+	if (policy->batch->count == 0) {
+		policy->batch->count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
 	}
 
 	/* Batches must have some minimal interval between them. */
-	if (sign_lifetime / policy->batch_count < KNOT_DNSSEC_MIN_BATCH_INTERVAL) {
-		policy->batch_count = sign_lifetime / KNOT_DNSSEC_MIN_BATCH_INTERVAL;
-		if (policy->batch_count == 0) {
-			policy->batch_count = 1;
+	if (sign_lifetime / policy->batch->count
+	    < KNOT_DNSSEC_MIN_BATCH_INTERVAL) {
+		policy->batch->count =
+		                 sign_lifetime / KNOT_DNSSEC_MIN_BATCH_INTERVAL;
+		if (policy->batch->count == 0) {
+			policy->batch->count = 1;
 		}
 	}
 
 	/* Resign only signatures from the next batch. */
-	policy->refresh_before = policy->now + sign_lifetime / policy->batch_count;
+	policy->refresh_before = policy->now
+	                         + sign_lifetime / policy->batch->count;
 }
 
 _public_
 void knot_dnssec_init_default_policy(knot_dnssec_policy_t *policy)
 {
-	if (policy == NULL) {
+	if (policy == NULL || policy->batch == NULL) {
 		return;
 	}
 
-	memset(policy, 0, sizeof(*policy));
-
+	policy->forced_sign = false;
 	policy->now = time(NULL);
 	policy->soa_up = KNOT_SOA_SERIAL_UPDATE;
-	policy->batch_count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
+	policy->batch->count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
 
 	knot_dnssec_policy_set_sign_lifetime(policy, KNOT_DNSSEC_DEFAULT_LIFETIME);
 }

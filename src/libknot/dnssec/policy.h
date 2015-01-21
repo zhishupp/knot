@@ -35,20 +35,24 @@ typedef enum knot_update_serial {
 } knot_update_serial_t;
 
 typedef struct {
+	uint32_t count;             //! Count of signing batches.
+	uint32_t cur_nr;            //! Current batch number. Counted from 1.
+	uint32_t first;             //! Lifetime of the first batch.
+	uint32_t current;           //! Lifetime of the current batch.
+} knot_dnssec_batch_t;
+
+typedef struct {
 	uint32_t now;               //! Current time.
 	uint32_t refresh_before;    //! Refresh signatures expiring before this time.
 	uint32_t sign_lifetime;     //! Signature life time.
-	uint32_t batch_count;       //! Count of signing batches.
-	uint32_t batch_nr;          //! Current batch number. Counted from 1.
-	uint32_t first_batch;       //! Lifetime of the first batch.
-	uint32_t cur_batch;         //! Lifetime of the current batch.
+	knot_dnssec_batch_t *batch; //! Batch info
 	bool forced_sign;           //! Drop valid signatures as well.
 	knot_update_serial_t soa_up;//! Policy for serial updating.
 } knot_dnssec_policy_t;
 
 #define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000	// 30 days
 #define KNOT_DNSSEC_DEFAULT_BATCH_COUNT 10	// one batch every 3 days
-#define KNOT_DNSSEC_MIN_BATCH_INTERVAL 86400 //1 day; 259200	// 3 days
+#define KNOT_DNSSEC_MIN_BATCH_INTERVAL 60 //1 day; 259200	// 3 days
 #define KNOT_DNSSEC_MIN_REFRESH 86400		// 1 day
 
 /*!
@@ -64,6 +68,8 @@ void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
 
 /*!
  * \brief Get signature refresh time from the earliest expiration time.
+ *
+ * \note \a earliest_expiration must be an absolute value.
  */
 uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
                                          uint32_t earliest_expiration);

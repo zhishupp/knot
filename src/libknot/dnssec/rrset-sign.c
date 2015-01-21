@@ -265,7 +265,7 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
                     uint32_t *min_expire)
 {
 	if (knot_rrset_empty(covered) || !key || !sign_ctx || !policy ||
-	    rrsigs->type != KNOT_RRTYPE_RRSIG ||
+	    !policy->batch || rrsigs->type != KNOT_RRTYPE_RRSIG ||
 	    !knot_dname_is_equal(rrsigs->owner, covered->owner)
 	) {
 		return KNOT_EINVAL;
@@ -275,8 +275,9 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 	uint32_t sig_incept = policy->now;
 	uint32_t sig_expire = sig_incept;
 
-	if (policy->cur_batch > 0) {
-		sig_expire += policy->cur_batch;
+	if (policy->batch->current > 0) {
+		sig_expire += policy->batch->current;
+		printf("Using expiration: %u (min: %u)\n", sig_expire, *min_expire);
 	} else {
 		/* TODO[jitter] Remove this assert. */
 		assert(0);

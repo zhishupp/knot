@@ -34,7 +34,7 @@ static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
 	knot_rrset_t apex_rrsig = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	if (apex_rrsig.type != KNOT_RRTYPE_RRSIG) {
 		// No RRSIG, first batch is one batch interval from now
-		return policy->sign_lifetime / policy->batch_count;
+		return policy->sign_lifetime / policy->batch->count;
 	}
 
 	/* Just get any lifetime, the first can be counted from it.
@@ -45,7 +45,14 @@ static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
 	/* Any signature shouln'd expire now. */
 	assert(lt > 0);
 
-	return lt % (policy->sign_lifetime / policy->batch_count);
+	uint32_t first = lt % (policy->sign_lifetime / policy->batch->count);
+
+	/* If first batch is less than one batch interval from now, it means it
+	 * will be resigned. Use the next batch.
+	 */
+	return (first > policy->sign_lifetime / policy->batch->count)
+	                ? first
+	                : first + policy->sign_lifetime / policy->batch->count;
 }
 
 static int init_dnssec_structs(const zone_contents_t *zone,
@@ -58,6 +65,7 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	assert(config);
 	assert(zone_keys);
 	assert(policy);
+	assert(policy->batch);
 
 	// Read zone keys from disk
 	bool nsec3_enabled = knot_is_nsec3_enabled(zone);
@@ -82,13 +90,13 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	}
 
 	// Get the time of the first batch in the zone
-	policy->first_batch = get_first_batch(policy, zone);
+	policy->batch->first = get_first_batch(policy, zone);
 
 	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "
 	       "refresh before: %u (relative: %u), first batch: %u\n",
-	       policy->batch_count, policy->sign_lifetime, policy->now,
+	       policy->batch->count, policy->sign_lifetime, policy->now,
 	       policy->refresh_before, policy->refresh_before - policy->now,
-	       policy->first_batch);
+	       policy->batch->first);
 
 	return KNOT_EOK;
 }
@@ -111,7 +119,10 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	// Init needed structs
 	knot_zone_keys_t zone_keys;
 	knot_init_zone_keys(&zone_keys);
-	knot_dnssec_policy_t policy = { '\0' };
+	knot_dnssec_policy_t policy = { 0 };
+	knot_dnssec_batch_t batch = { 0 };
+	policy.batch = &batch;
+
 	int result = init_dnssec_structs(zone, zone_config, &zone_keys, &policy,
 	                                 soa_up, force);
 	if (result != KNOT_EOK) {
@@ -170,12 +181,12 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	 *              Probably not, DNSKEYs are updated only here...?
 	 */
 	uint32_t dnskey_update = knot_get_next_zone_key_event(&zone_keys);
+	printf("DNSKEY event: %u, first batch: %u, min expire (rel.): %u\n",
+	       dnskey_update, policy.batch->first, min_expire - policy.now);
 	if (min_expire < dnskey_update) {
 		// Signatures expire before keys do
-		assert(policy.first_batch != 0);
-		printf("First batch: %u, min expire: %u\n", policy.first_batch,
-		       min_expire - policy.now);
-		assert(min_expire <= policy.now + policy.first_batch);
+		assert(policy.batch->first != 0);
+		assert(min_expire <= policy.now + policy.batch->first);
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 	} else {
 		printf("Keys expire before signatures: %u\n", dnskey_update);
@@ -235,7 +246,9 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	// Init needed structures
 	knot_zone_keys_t zone_keys;
 	knot_init_zone_keys(&zone_keys);
-	knot_dnssec_policy_t policy = { '\0' };
+	knot_dnssec_policy_t policy = { 0 };
+	knot_dnssec_batch_t batch = { 0 };
+	policy.batch = &batch;
 	int ret = init_dnssec_structs(zone, zone_config, &zone_keys, &policy,
 	                              soa_up, false);
 	if (ret != KNOT_EOK) {
@@ -278,16 +291,17 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 
 	knot_free_zone_keys(&zone_keys);
 
-	/* TODO[jitter]: Maybe do not plan any resign, resigning of the next
-	 *               batch should be already planned.
-	 * TODO[jitter]: Maybe we don't need the earliest expiration? First
-	 *               batch time is the earliest? It should be, everything
-	 *               before that should have been resigned, but is there a
+	/* Note[jitter]: Maybe we don't need the earliest expiration. First
+	 *               batch time should be the earliest, everything
+	 *               before that should have been resigned. but is there a
 	 *               way to ensure that? What if the parameters' values
 	 *               change?
+	 *               This approach, with always getting the current minimum
+	 *               expiration time is IMHO safer and it's not a big
+	 *               overhead.
 	 */
-	assert(policy.first_batch != 0);
-	assert(min_expire <= policy.first_batch);
+	assert(policy.batch->first != 0);
+	assert(min_expire <= policy.now + policy.batch->first);
 	*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 
 	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,

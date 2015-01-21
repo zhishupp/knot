@@ -459,22 +459,20 @@ static int remove_standalone_rrsigs(const zone_node_t *node,
 	return KNOT_EOK;
 }
 
-static inline uint32_t batch_lifetime(knot_dnssec_policy_t *policy)
+static inline uint32_t batch_lifetime(const knot_dnssec_policy_t *policy)
 {
 	/* Batch is counted from 1. */
-	return policy->first_batch + (policy->batch_nr - 1) *
-	                (policy->sign_lifetime / policy->batch_count);
+	return policy->batch->first + (policy->batch->cur_nr - 1) *
+	                (policy->sign_lifetime / policy->batch->count);
 }
 
-static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
+static uint32_t expiration(const knot_rrset_t *rrsigs, uint16_t type)
 {
 	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
 		const uint16_t type_covered =
 			knot_rrsig_type_covered(&rrsigs->rrs, i);
-		/* TODO[jitter] This does not distinguish between signatures
-		 *              made by different keys!
-		 *              But they might be the same, as the batch is
-		 *              set per-RRSet.
+		/* We may use any RRSIG, expiration is dependent on RRSet and
+		 * independent on the used key.
 		 */
 		if (type_covered == type) {
 			return knot_rrsig_sig_expiration(&rrsigs->rrs, i);
@@ -484,18 +482,19 @@ static uint32_t expiration(knot_rrset_t *rrsigs, uint16_t type)
 	return 0;
 }
 
-static inline void next_batch(knot_dnssec_policy_t *policy)
+static inline void next_batch(knot_dnssec_batch_t *batch)
 {
 	/* Batch is counted from 1. 0 means no batch was yet assigned. */
-	policy->batch_nr = (policy->batch_nr % policy->batch_count) + 1;
+	batch->cur_nr = (batch->cur_nr % batch->count) + 1;
 }
 
-static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
+static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
                                    const knot_rrset_t *old_rrsigs,
                                    uint16_t type)
 {
 	assert(policy);
 	assert(old_rrsigs);
+	assert(policy->batch);
 
 	uint32_t rrsig_ex = 0;
 	if (old_rrsigs->owner != NULL) {
@@ -504,27 +503,27 @@ static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
 
 	if (rrsig_ex == 0) {
 		// No old RRSIGs => move to next batch, counted from 1. */
-		next_batch(policy);
-		policy->cur_batch = batch_lifetime(policy);
+		next_batch(policy->batch);
+		policy->batch->current = batch_lifetime(policy);
 		printf("No RRSIGs => next batch #: %u, lifetime: %u\n",
-		       policy->batch_nr, policy->cur_batch);
+		       policy->batch->cur_nr, policy->batch->current);
 	} else {
 		// RRSet already in zone, retain its batch
-		policy->cur_batch = rrsig_ex - policy->now;
+		policy->batch->current = rrsig_ex - policy->now;
 		printf("Existing RRSIGs => reusing batch...");
 
 		// If expired, extend by whole lifetime
 		if (rrsig_ex <= policy->refresh_before) {
 			printf("Expired RRSIG...");
-			policy->cur_batch += policy->sign_lifetime;
+			policy->batch->current += policy->sign_lifetime;
 		}
 
-		printf("Batch lifetime: %u\n", policy->cur_batch);
+		printf("Batch lifetime: %u\n", policy->batch->current);
 
 		/* TODO[jitter] Remove this assert. */
-		assert(policy->first_batch == 0
-		       || (policy->cur_batch - policy->first_batch)
-		          % (policy->sign_lifetime / policy->batch_count) == 0);
+		assert(policy->batch->first == 0
+		       || (policy->batch->current - policy->batch->first)
+		          % (policy->sign_lifetime / policy->batch->count) == 0);
 	}
 }
 
@@ -534,7 +533,7 @@ static void assign_batch_for_rrset(knot_dnssec_policy_t *policy,
  */
 static void assign_batch(const zone_contents_t *old_zone,
                          const knot_rrset_t *chg_rrset,
-                         knot_dnssec_policy_t *policy)
+                         const knot_dnssec_policy_t *policy)
 {
 	// Check if such name+type is in the old zone
 	const zone_node_t *old_node = NULL;
@@ -700,7 +699,7 @@ typedef struct {
 	const zone_contents_t *old_zone;
 	const zone_contents_t *zone;
 	const knot_zone_keys_t *zone_keys;
-	knot_dnssec_policy_t *policy;
+	const knot_dnssec_policy_t *policy;
 	changeset_t *changeset;
 	hattrie_t *signed_tree;
 	uint32_t *min_expire;
@@ -1392,6 +1391,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 	}
 
 	// assign batch to the SOA RRSet
+	printf("Assigning batch for SOA.\n");
 	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA);
 
 	// copy old SOA and create new SOA with updated serial
