@@ -47,12 +47,14 @@ static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
 
 	uint32_t first = lt % (policy->sign_lifetime / policy->batch->count);
 
-	/* If first batch is less than one batch interval from now, it means it
-	 * will be resigned. Use the next batch.
+	/* If first batch is less than refresh interval from now, it means it
+	 * will be resigned. Use the next batch after refresh.
 	 */
-	return (first > policy->sign_lifetime / policy->batch->count)
-	                ? first
-	                : first + policy->sign_lifetime / policy->batch->count;
+	while (first <= policy->refresh) {
+		first += policy->sign_lifetime / policy->batch->count;
+	}
+
+	return first;
 }
 
 static int init_dnssec_structs(const zone_contents_t *zone,

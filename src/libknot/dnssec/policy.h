@@ -57,7 +57,7 @@ typedef struct {
 #define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000	// 30 days
 #define KNOT_DNSSEC_DEFAULT_BATCH_COUNT 10	// one batch every 3 days
 #define KNOT_DNSSEC_MIN_BATCH_INTERVAL 60 //1 day; 259200	// 3 days
-#define KNOT_DNSSEC_MIN_REFRESH 86400		// 1 day
+#define KNOT_DNSSEC_MIN_REFRESH 140		// 1 day
 
 /*!
  * \brief Initialize default signing policy.
