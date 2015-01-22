@@ -1311,6 +1311,8 @@ int knot_zone_sign(const zone_contents_t *zone,
 		return result;
 	}
 
+	printf("Min expire after DNSKEYs: %u\n", *min_expire);
+
 	uint32_t normal_tree_expiration = UINT32_MAX;
 	result = zone_tree_sign(zone->nodes, zone_keys, policy, changeset,
 	                        &normal_tree_expiration);
@@ -1327,7 +1329,8 @@ int knot_zone_sign(const zone_contents_t *zone,
 		return result;
 	}
 
-	*min_expire = MIN(normal_tree_expiration, nsec3_tree_expiration);
+	*min_expire = MIN(*min_expire, normal_tree_expiration);
+	*min_expire = MIN(*min_expire, nsec3_tree_expiration);
 
 	return KNOT_EOK;
 }

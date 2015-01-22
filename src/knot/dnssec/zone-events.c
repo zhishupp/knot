@@ -129,7 +129,10 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		return result;
 	}
 
-	uint32_t min_expire = policy.sign_lifetime;
+	// Expiration must be an absolute value
+	uint32_t min_expire = policy.now + policy.sign_lifetime;
+
+	printf("Min expire: %u\n", min_expire);
 
 	// generate NSEC records
 	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy,
@@ -143,6 +146,8 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	dbg_dnssec_verb("changeset empty after generating NSEC chain: %d\n",
 	                changeset_empty(out_ch));
 
+	printf("Min expire after NSEC: %u\n", min_expire);
+
 	// add missing signatures
 	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch, &min_expire);
 	if (result != KNOT_EOK) {
@@ -153,6 +158,8 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	}
 	dbg_dnssec_verb("changeset emtpy after signing: %d\n",
 	                changeset_empty(out_ch));
+
+	printf("Min expire after zone: %u\n", min_expire);
 
 	// Check if only SOA changed
 	if (changeset_empty(out_ch) &&
@@ -175,6 +182,8 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		knot_free_zone_keys(&zone_keys);
 		return result;
 	}
+
+	printf("Min expire after SOA: %u\n", min_expire);
 
 	// DNSKEY updates
 	/* TODO[jitter] Shouldn't this be done also in the changeset signing?
@@ -255,7 +264,8 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 		return ret;
 	}
 
-	uint32_t min_expire = policy.sign_lifetime;
+	// Expiration must be an absolute value
+	uint32_t min_expire = policy.now + policy.sign_lifetime;
 
 	// Sign added and removed RRSets in changeset
 	ret = knot_zone_sign_changeset(zone, in_ch, out_ch,

@@ -23,6 +23,12 @@
 #include "libknot/dnssec/policy.h"
 #include "libknot/internal/macros.h"
 
+/*! \todo Value 0 does not make sense as the return value should be an
+ *        absolute time. If resign is planned for time '0', it never happens.
+ *        The return value should either be checked in the caller function
+ *        or this function should always return valid time, i.e. probably
+ *        policy->now.
+ */
 _public_
 uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
                                          uint32_t earliest_expiration)
@@ -43,7 +49,7 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 		signature_safety = MAX(signature_safety, KNOT_DNSSEC_MIN_REFRESH);
 	}
 
-	if (earliest_expiration - policy->now <= signature_safety) {
+	if (earliest_expiration <= policy->now + signature_safety) {
 		return 0;
 	}
 
