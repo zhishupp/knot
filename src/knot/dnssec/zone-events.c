@@ -85,19 +85,20 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	policy->forced_sign = force;
 
 	// Override signature lifetime, if set in config
+	//! \todo Later: also override 'refresh' interval if set in config.
 	if (config->sig_lifetime > 0) {
 		knot_dnssec_policy_set_sign_lifetime(policy,
-		                                     config->sig_lifetime);
+		                                     config->sig_lifetime,
+		                                     policy->refresh);
 	}
 
 	// Get the time of the first batch in the zone
 	policy->batch->first = get_first_batch(policy, zone);
 
 	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "
-	       "refresh before: %u (relative: %u), first batch: %u\n",
+	       "refresh: %u, first batch: %u\n",
 	       policy->batch->count, policy->sign_lifetime, policy->now,
-	       policy->refresh_before, policy->refresh_before - policy->now,
-	       policy->batch->first);
+	       policy->refresh, policy->batch->first);
 
 	return KNOT_EOK;
 }

@@ -40,25 +40,20 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 	printf("Counting refresh time. Earliest expiration: %u.\n",
 	       earliest_expiration - policy->now);
 
-	/* TODO[jitter] This must be counted from batch interval probably.
-	 *              Otherwise it may be larger than batch.
-	 */
-	uint32_t signature_safety = policy->sign_lifetime / 10;
-
-	if (policy->sign_lifetime > 2 * KNOT_DNSSEC_MIN_REFRESH) {
-		signature_safety = MAX(signature_safety, KNOT_DNSSEC_MIN_REFRESH);
-	}
-
-	if (earliest_expiration <= policy->now + signature_safety) {
+	if (earliest_expiration <= policy->now + policy->refresh) {
+		/* TODO[jitter] This should not happen, we are resigning those
+		 *              signatures that expire within the safety interval.
+		 */
 		return 0;
 	}
 
-	return earliest_expiration - signature_safety;
+	return earliest_expiration - policy->refresh;
 }
 
 _public_
 void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
-                                          uint32_t sign_lifetime)
+                                          uint32_t sign_lifetime,
+                                          uint32_t refresh)
 {
 	if (policy == NULL || policy->batch == NULL) {
 		return;
@@ -81,8 +76,7 @@ void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
 	}
 
 	/* Resign only signatures from the next batch. */
-	policy->refresh_before = policy->now
-	                         + sign_lifetime / policy->batch->count;
+	policy->refresh = refresh;
 }
 
 _public_
@@ -97,5 +91,7 @@ void knot_dnssec_init_default_policy(knot_dnssec_policy_t *policy)
 	policy->soa_up = KNOT_SOA_SERIAL_UPDATE;
 	policy->batch->count = KNOT_DNSSEC_DEFAULT_BATCH_COUNT;
 
-	knot_dnssec_policy_set_sign_lifetime(policy, KNOT_DNSSEC_DEFAULT_LIFETIME);
+	knot_dnssec_policy_set_sign_lifetime(policy,
+	                                     KNOT_DNSSEC_DEFAULT_LIFETIME,
+	                                     KNOT_DNSSEC_MIN_REFRESH);
 }

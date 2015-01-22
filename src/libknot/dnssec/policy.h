@@ -43,7 +43,11 @@ typedef struct {
 
 typedef struct {
 	uint32_t now;               //! Current time.
-	uint32_t refresh_before;    //! Refresh signatures expiring before this time.
+
+	/*! Plan next resign this time before earliest expiration.
+	 *  Also renew signatures expiring before 'refresh' from 'now'.
+	 */
+	uint32_t refresh;
 	uint32_t sign_lifetime;     //! Signature life time.
 	knot_dnssec_batch_t *batch; //! Batch info
 	bool forced_sign;           //! Drop valid signatures as well.
@@ -64,7 +68,8 @@ void knot_dnssec_init_default_policy(knot_dnssec_policy_t *policy);
  * \brief Set policy timing data according to requested signature lifetime.
  */
 void knot_dnssec_policy_set_sign_lifetime(knot_dnssec_policy_t *policy,
-                                          uint32_t sign_lifetime);
+                                          uint32_t sign_lifetime,
+                                          uint32_t refresh);
 
 /*!
  * \brief Get signature refresh time from the earliest expiration time.

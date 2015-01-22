@@ -522,7 +522,7 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 		printf("Existing RRSIGs => reusing batch...");
 
 		// If expired, extend by whole lifetime
-		if (rrsig_ex <= policy->refresh_before) {
+		if (rrsig_ex <= policy->now + policy->refresh) {
 			printf("Expired RRSIG...");
 			policy->batch->current += policy->sign_lifetime;
 		}
