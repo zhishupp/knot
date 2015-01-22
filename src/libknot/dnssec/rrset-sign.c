@@ -287,9 +287,7 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 	int ret = rrsigs_create_rdata(rrsigs, sign_ctx, covered, key, sig_incept,
 	                              sig_expire);
 
-	if (sig_expire < *min_expire) {
-		*min_expire = sig_expire;
-	}
+	*min_expire = MIN(*min_expire, sig_expire);
 
 	return ret;
 }
