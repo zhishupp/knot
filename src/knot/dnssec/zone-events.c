@@ -86,7 +86,8 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 
 	// Override signature lifetime, if set in config
 	if (config->sig_lifetime > 0) {
-		knot_dnssec_policy_set_sign_lifetime(policy, config->sig_lifetime);
+		knot_dnssec_policy_set_sign_lifetime(policy,
+		                                     config->sig_lifetime);
 	}
 
 	// Get the time of the first batch in the zone
@@ -132,8 +133,6 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	// Expiration must be an absolute value
 	uint32_t min_expire = policy.now + policy.sign_lifetime;
 
-	printf("Min expire: %u\n", min_expire);
-
 	// generate NSEC records
 	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy,
 	                                     &min_expire);
@@ -146,8 +145,6 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	dbg_dnssec_verb("changeset empty after generating NSEC chain: %d\n",
 	                changeset_empty(out_ch));
 
-	printf("Min expire after NSEC: %u\n", min_expire);
-
 	// add missing signatures
 	result = knot_zone_sign(zone, &zone_keys, &policy, out_ch, &min_expire);
 	if (result != KNOT_EOK) {
@@ -159,14 +156,15 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	dbg_dnssec_verb("changeset emtpy after signing: %d\n",
 	                changeset_empty(out_ch));
 
-	printf("Min expire after zone: %u\n", min_expire);
-
 	// Check if only SOA changed
 	if (changeset_empty(out_ch) &&
-	    !knot_zone_sign_soa_expired(zone, &zone_keys, &policy)) {
+	    !knot_zone_sign_soa_expired(zone, &zone_keys, &policy, &min_expire)) {
 		log_zone_info(zone_name, "DNSSEC, no signing performed, zone is valid");
 		knot_free_zone_keys(&zone_keys);
 		assert(changeset_empty(out_ch));
+		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
+		printf("Refresh will be planned for: %u (rel %u)\n",
+		       *refresh_at, *refresh_at - policy.now);
 		return KNOT_EOK;
 	}
 
@@ -183,14 +181,10 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		return result;
 	}
 
-	printf("Min expire after SOA: %u\n", min_expire);
-
 	// DNSKEY updates
-	/* TODO[jitter] Shouldn't this be done also in the changeset signing?
-	 *              Probably not, DNSKEYs are updated only here...?
-	 */
 	uint32_t dnskey_update = knot_get_next_zone_key_event(&zone_keys);
-	printf("DNSKEY event: %u, first batch: %u, min expire (rel.): %u\n",
+	printf("Zone sign complete. "
+	       "DNSKEY event: %u, first batch: %u, min expire (rel.): %u\n",
 	       dnskey_update, policy.batch->first, min_expire - policy.now);
 	if (min_expire < dnskey_update) {
 		// Signatures expire before keys do

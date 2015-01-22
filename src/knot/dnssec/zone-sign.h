@@ -91,7 +91,8 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa, const knot_rrset_t *rrsig
  */
 bool knot_zone_sign_soa_expired(const zone_contents_t *zone,
                                 const knot_zone_keys_t *zone_keys,
-                                const knot_dnssec_policy_t *policy);
+                                const knot_dnssec_policy_t *policy,
+                                uint32_t *min_expire);
 
 /*!
  * \brief Sign changeset created by DDNS or zone-diff.

@@ -67,10 +67,11 @@ static knot_rrset_t create_empty_rrsigs_for(const knot_rrset_t *covered)
  * \return The signature exists and is valid.
  */
 static bool valid_signature_exists(const knot_rrset_t *covered,
-				   const knot_rrset_t *rrsigs,
-				   const knot_dnssec_key_t *key,
-				   knot_dnssec_sign_context_t *ctx,
-				   const knot_dnssec_policy_t *policy)
+                                   const knot_rrset_t *rrsigs,
+                                   const knot_dnssec_key_t *key,
+                                   knot_dnssec_sign_context_t *ctx,
+                                   const knot_dnssec_policy_t *policy,
+                                   uint32_t *min_expire)
 {
 	assert(key);
 
@@ -86,8 +87,13 @@ static bool valid_signature_exists(const knot_rrset_t *covered,
 			continue;
 		}
 
-		return knot_is_valid_signature(covered, rrsigs, i, key, ctx,
-		                               policy) == KNOT_EOK;
+		int ret = knot_is_valid_signature(covered, rrsigs, i, key, ctx,
+		                                  policy);
+		if (ret == KNOT_EOK) {
+			*min_expire = MIN(*min_expire,
+			            knot_rrsig_sig_expiration(&rrsigs->rrs, i));
+			return true;
+		}
 	}
 
 	return false;
@@ -129,7 +135,8 @@ static bool use_key(const knot_zone_key_t *key, const knot_rrset_t *covered)
 static bool all_signatures_exist(const knot_rrset_t *covered,
                                  const knot_rrset_t *rrsigs,
                                  const knot_zone_keys_t *zone_keys,
-                                 const knot_dnssec_policy_t *policy)
+                                 const knot_dnssec_policy_t *policy,
+                                 uint32_t *min_expire)
 {
 	assert(!knot_rrset_empty(covered));
 	assert(zone_keys);
@@ -142,7 +149,7 @@ static bool all_signatures_exist(const knot_rrset_t *covered,
 		}
 
 		if (!valid_signature_exists(covered, rrsigs, &key->dnssec_key,
-		                            key->context, policy)) {
+		                            key->context, policy, min_expire)) {
 			return false;
 		}
 	}
@@ -306,7 +313,8 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
 		}
 
 		if (valid_signature_exists(covered, rrsigs, &key->dnssec_key,
-		                           key->context, policy)) {
+		                           key->context, policy, min_expire)) {
+			printf("Valid signature, no signing.\n");
 			continue;
 		}
 
@@ -314,6 +322,7 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
 			to_add = create_empty_rrsigs_for(covered);
 		}
 
+		printf("Signing RRSet.\n");
 		result = knot_sign_rrset(&to_add, covered, &key->dnssec_key,
 		                         key->context, policy, min_expire);
 		if (result != KNOT_EOK) {
@@ -1045,6 +1054,11 @@ static int update_dnskeys(const zone_contents_t *zone,
 	if (result != KNOT_EOK) {
 		return result;
 	}
+
+	/*! \todo It seems to me that this is unnecessary. The
+	 *        all_signature_exist() function below skips RRSIGs that are not
+	 *        covering the proper RR type. We may just pass `rrsigs` into it.
+	 */
 	knot_rrset_t dnskey_rrsig;
 	knot_rrset_init(&dnskey_rrsig, apex->owner, KNOT_RRTYPE_RRSIG,
 	                KNOT_CLASS_IN);
@@ -1058,8 +1072,9 @@ static int update_dnskeys(const zone_contents_t *zone,
 
 	bool modified = (changeset_size(changeset) != changes_before);
 	bool signatures_exist = (!knot_rrset_empty(&dnskeys) &&
-	                        all_signatures_exist(&dnskeys, &dnskey_rrsig,
-	                                             zone_keys, policy));
+	                         all_signatures_exist(&dnskeys, &dnskey_rrsig,
+	                                              zone_keys, policy,
+	                                              min_expire));
 	knot_rdataset_clear(&dnskey_rrsig.rrs, NULL);
 	if (!modified && signatures_exist) {
 		return KNOT_EOK;
@@ -1311,8 +1326,6 @@ int knot_zone_sign(const zone_contents_t *zone,
 		return result;
 	}
 
-	printf("Min expire after DNSKEYs: %u\n", *min_expire);
-
 	uint32_t normal_tree_expiration = UINT32_MAX;
 	result = zone_tree_sign(zone->nodes, zone_keys, policy, changeset,
 	                        &normal_tree_expiration);
@@ -1340,7 +1353,8 @@ int knot_zone_sign(const zone_contents_t *zone,
  */
 bool knot_zone_sign_soa_expired(const zone_contents_t *zone,
                                 const knot_zone_keys_t *zone_keys,
-                                const knot_dnssec_policy_t *policy)
+                                const knot_dnssec_policy_t *policy,
+                                uint32_t *min_expire)
 {
 	if (!zone || !zone_keys || !policy) {
 		return KNOT_EINVAL;
@@ -1349,7 +1363,7 @@ bool knot_zone_sign_soa_expired(const zone_contents_t *zone,
 	knot_rrset_t soa = node_rrset(zone->apex, KNOT_RRTYPE_SOA);
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	assert(!knot_rrset_empty(&soa));
-	return !all_signatures_exist(&soa, &rrsigs, zone_keys, policy);
+	return !all_signatures_exist(&soa, &rrsigs, zone_keys, policy, min_expire);
 }
 
 /*!
