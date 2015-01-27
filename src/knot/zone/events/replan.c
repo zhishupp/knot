@@ -107,10 +107,15 @@ static void duplicate_ddns_q(zone_t *zone, zone_t *old_zone)
 }
 
 /*!< Replans DNSSEC event. Not whole resign needed, \todo #247 */
-static void replan_dnssec(zone_t *zone)
+static void replan_dnssec(zone_t *zone, zone_t *old_zone)
 {
 	if (zone->conf->dnssec_enable) {
-		/* Keys could have changed, force resign. */
+		/* Keys could have changed, force resign.
+		 * If lifetime changed, force whole resign.
+		 */
+		if (old_zone->conf->sig_lifetime != zone->conf->sig_lifetime) {
+			zone->flags |= ZONE_FORCE_RESIGN;
+		}
 		zone_events_schedule(zone, ZONE_EVENT_DNSSEC, ZONE_EVENT_NOW);
 	}
 }
@@ -135,5 +140,5 @@ void replan_events(zone_t *zone, zone_t *old_zone)
 	replan_flush(zone, old_zone);
 	replan_event(zone, old_zone, ZONE_EVENT_NOTIFY);
 	replan_update(zone, old_zone);
-	replan_dnssec(zone);
+	replan_dnssec(zone, old_zone);
 }

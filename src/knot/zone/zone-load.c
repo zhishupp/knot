@@ -140,8 +140,20 @@ int zone_load_post(zone_contents_t *contents, zone_t *zone, uint32_t *dnssec_ref
 	/* Sign zone using DNSSEC (if configured). */
 	if (conf->dnssec_enable) {
 		assert(conf->build_diffs);
-		ret = knot_dnssec_zone_sign(contents, conf, &change, KNOT_SOA_SERIAL_UPDATE,
-		                            dnssec_refresh);
+		if (zone->flags & ZONE_FORCE_RESIGN) {
+			log_zone_info(zone->name, "DNSSEC, dropping previous "
+			              "signatures, resigning zone");
+
+			zone->flags &= ~ZONE_FORCE_RESIGN;
+			ret = knot_dnssec_zone_sign_force(contents, conf, &change,
+			                                  dnssec_refresh);
+		} else {
+			log_zone_info(zone->name, "DNSSEC, signing zone");
+			ret = knot_dnssec_zone_sign(contents, conf,
+			                            &change, KNOT_SOA_SERIAL_UPDATE,
+			                            dnssec_refresh);
+		}
+
 		if (ret != KNOT_EOK) {
 			changeset_clear(&change);
 			return ret;

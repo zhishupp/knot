@@ -29,11 +29,11 @@
 #include "libknot/rrtype/rrsig.h"
 
 static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
-                                const zone_contents_t *zone)
+                                const zone_contents_t *zone, bool force)
 {
 	knot_rrset_t apex_rrsig = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
-	if (apex_rrsig.type != KNOT_RRTYPE_RRSIG) {
-		// No RRSIG, first batch is one batch interval from now
+	if (force || apex_rrsig.type != KNOT_RRTYPE_RRSIG) {
+		// No RRSIG or forced resign, first batch is one batch interval from now
 		return policy->now + policy->sign_lifetime / policy->batch->count;
 	}
 
@@ -96,7 +96,7 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	}
 
 	// Get the time of the first batch in the zone
-	policy->batch->first = get_first_batch(policy, zone);
+	policy->batch->first = get_first_batch(policy, zone, force);
 	assert(policy->batch->first > policy->now);
 
 	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "

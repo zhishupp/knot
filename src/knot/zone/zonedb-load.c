@@ -145,11 +145,17 @@ static zone_t *create_zone_reload(conf_zone_t *zone_conf, server_t *server,
 	switch (zstatus) {
 	case ZONE_STATUS_FOUND_UPDATED:
 		/* Enqueueing makes the first zone load waitable. */
+		printf("Planning zone reload\n");
+		/* If lifetime changed, force whole zone resign. */
+		if (old_zone->conf->sig_lifetime != zone_conf->sig_lifetime) {
+			zone->flags |= ZONE_FORCE_RESIGN;
+		}
 		zone_events_enqueue(zone, ZONE_EVENT_RELOAD);
 		/* Replan DDNS processing if there are pending updates. */
 		zone_events_replan_ddns(zone, old_zone);
 		break;
 	case ZONE_STATUS_FOUND_CURRENT:
+		printf("Current zone\n");
 		zone->zonefile_mtime = old_zone->zonefile_mtime;
 		zone->zonefile_serial = old_zone->zonefile_serial;
 		/* Reuse events from old zone. */

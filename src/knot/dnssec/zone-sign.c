@@ -510,7 +510,10 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 		rrsig_ex = expiration(old_rrsigs, type);
 	}
 
-	if (rrsig_ex == 0) {
+	/* TODO[jitter] Consider using some other flag. This means that any
+	 *              forced resign will re-assign batches.
+	 */
+	if (rrsig_ex == 0 || policy->forced_sign) {
 		// No old RRSIGs => move to next batch, counted from 1. */
 		next_batch(policy->batch);
 		policy->batch->current = batch_lifetime(policy);
