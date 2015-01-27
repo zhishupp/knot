@@ -34,23 +34,24 @@ static uint32_t get_first_batch(const knot_dnssec_policy_t *policy,
 	knot_rrset_t apex_rrsig = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	if (apex_rrsig.type != KNOT_RRTYPE_RRSIG) {
 		// No RRSIG, first batch is one batch interval from now
-		return policy->sign_lifetime / policy->batch->count;
+		return policy->now + policy->sign_lifetime / policy->batch->count;
 	}
 
-	/* Just get any lifetime, the first can be counted from it.
-	 * Expiration is absolute time, convert to relative.
-	 */
-	uint32_t lt = knot_rrsig_sig_expiration(&apex_rrsig.rrs, 0)
-	              - policy->now;
-	/* Any signature shouln'd expire now. */
-	assert(lt > 0);
+	/* Just get any expiration, the first can be counted from it. */
+	uint32_t expire = knot_rrsig_sig_expiration(&apex_rrsig.rrs, 0);
 
-	uint32_t first = lt % (policy->sign_lifetime / policy->batch->count);
+	/* Expiration may be in the past. */
+	while (expire < policy->now) {
+		expire += policy->sign_lifetime;
+	}
+
+	uint32_t first = policy->now + ((expire - policy->now)
+	                      % (policy->sign_lifetime / policy->batch->count));
 
 	/* If first batch is less than refresh interval from now, it means it
 	 * will be resigned. Use the next batch after refresh.
 	 */
-	while (first <= policy->refresh) {
+	while (first <= policy->now + policy->refresh) {
 		first += policy->sign_lifetime / policy->batch->count;
 	}
 
@@ -96,11 +97,13 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 
 	// Get the time of the first batch in the zone
 	policy->batch->first = get_first_batch(policy, zone);
+	assert(policy->batch->first > policy->now);
 
 	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "
-	       "refresh: %u, first batch: %u\n",
+	       "refresh: %u, first batch: %u (rel: %u)\n",
 	       policy->batch->count, policy->sign_lifetime, policy->now,
-	       policy->refresh, policy->batch->first);
+	       policy->refresh, policy->batch->first,
+	       policy->batch->first - policy->now);
 
 	return KNOT_EOK;
 }
@@ -187,12 +190,13 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	// DNSKEY updates
 	uint32_t dnskey_update = knot_get_next_zone_key_event(&zone_keys);
 	printf("Zone sign complete. "
-	       "DNSKEY event: %u, first batch: %u, min expire (rel.): %u\n",
-	       dnskey_update, policy.batch->first, min_expire - policy.now);
+	       "DNSKEY event: %u, first batch: %u (rel: %u), min expire: %u (rel: %u)\n",
+	       dnskey_update, policy.batch->first, policy.batch->first - policy.now,
+	       min_expire, min_expire - policy.now);
 	if (min_expire < dnskey_update) {
 		// Signatures expire before keys do
 		assert(policy.batch->first != 0);
-		assert(min_expire <= policy.now + policy.batch->first);
+		assert(min_expire <= policy.batch->first);
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 	} else {
 		printf("Keys expire before signatures: %u\n", dnskey_update);
@@ -308,7 +312,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	 *               overhead.
 	 */
 	assert(policy.batch->first != 0);
-	assert(min_expire <= policy.now + policy.batch->first);
+	assert(policy.batch->first > policy.now);
 	*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 
 	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,

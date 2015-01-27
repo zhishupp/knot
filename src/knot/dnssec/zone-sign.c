@@ -514,20 +514,22 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 		// No old RRSIGs => move to next batch, counted from 1. */
 		next_batch(policy->batch);
 		policy->batch->current = batch_lifetime(policy);
-		printf("No RRSIGs => next batch #: %u, lifetime: %u\n",
-		       policy->batch->cur_nr, policy->batch->current);
+		printf("No RRSIGs => next batch #: %u, expiration: %u (rel: %u)\n",
+		       policy->batch->cur_nr, policy->batch->current,
+		       policy->batch->current - policy->now);
 	} else {
+		printf("Existing RRSIG => reusing batch...");
 		// RRSet already in zone, retain its batch
-		policy->batch->current = rrsig_ex - policy->now;
-		printf("Existing RRSIGs => reusing batch...");
+		policy->batch->current = rrsig_ex;
 
 		// If expired, extend by whole lifetime
-		if (rrsig_ex <= policy->now + policy->refresh) {
+		while (policy->batch->current <= policy->now + policy->refresh) {
 			printf("Expired RRSIG...");
 			policy->batch->current += policy->sign_lifetime;
 		}
 
-		printf("Batch lifetime: %u\n", policy->batch->current);
+		printf("Batch expire: %u (rel: %u)\n", policy->batch->current,
+		       policy->batch->current - policy->now);
 
 		/* TODO[jitter] Remove this assert. */
 		assert(policy->batch->first == 0
@@ -1481,6 +1483,12 @@ int knot_zone_sign_changeset(const zone_contents_t *zone,
 	changeset_iter_t itt;
 	changeset_iter_all(&itt, in_ch, false);
 
+	/*! \note Some signatures are generated twice. E.g. when removing and
+	 *        adding to the same RRSet (quite common scenario) the RRSIG is
+	 *        created for both the REMOVE and ADD RRSets. It isn't duplicated
+	 *        in the changeset then only because RRSet merge discards
+	 *        duplicates. It would be nice to optimize it somehow.
+	 */
 	knot_rrset_t rr = changeset_iter_next(&itt);
 	while (!knot_rrset_empty(&rr)) {
 		int ret = sign_changeset_wrap(&rr, &args);

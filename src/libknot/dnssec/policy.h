@@ -37,8 +37,8 @@ typedef enum knot_update_serial {
 typedef struct {
 	uint32_t count;             //! Count of signing batches.
 	uint32_t cur_nr;            //! Current batch number. Counted from 1.
-	uint32_t first;             //! Lifetime of the first batch.
-	uint32_t current;           //! Lifetime of the current batch.
+	uint32_t first;             //! Expiration of the first batch (absolute).
+	uint32_t current;           //! Expiration of the current batch (absolute)
 } knot_dnssec_batch_t;
 
 typedef struct {
@@ -57,7 +57,7 @@ typedef struct {
 #define KNOT_DNSSEC_DEFAULT_LIFETIME 2592000	// 30 days
 #define KNOT_DNSSEC_DEFAULT_BATCH_COUNT 10	// one batch every 3 days
 #define KNOT_DNSSEC_MIN_BATCH_INTERVAL 60 //1 day; 259200	// 3 days
-#define KNOT_DNSSEC_MIN_REFRESH 140		// 1 day
+#define KNOT_DNSSEC_MIN_REFRESH 30		// 1 day
 
 /*!
  * \brief Initialize default signing policy.

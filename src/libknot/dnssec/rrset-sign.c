@@ -254,9 +254,6 @@ static int rrsigs_create_rdata(knot_rrset_t *rrsigs,
 	                            knot_rdata_ttl(covered_data), NULL);
 }
 
-/* TODO[jitter]: policy cannot be const.
- *               maybe separate the batch info to separate parameter.
- */
 _public_
 int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
                     const knot_dnssec_key_t *key,
@@ -276,7 +273,7 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 	uint32_t sig_expire = sig_incept;
 
 	if (policy->batch->current > 0) {
-		sig_expire += policy->batch->current;
+		sig_expire = policy->batch->current;
 		printf("Using expiration: %u (rel: %u), min: %u (rel: %u)\n",
 		       sig_expire, sig_expire - policy->now,
 		       *min_expire, *min_expire - policy->now);
