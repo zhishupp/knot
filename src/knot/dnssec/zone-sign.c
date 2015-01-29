@@ -473,6 +473,11 @@ static inline uint32_t batch_lifetime(const knot_dnssec_policy_t *policy)
 	                (policy->sign_lifetime / policy->batch->count);
 }
 
+static inline uint32_t batch_lifetime_soa(const knot_dnssec_policy_t *policy)
+{
+	return policy->batch->first + policy->sign_lifetime / policy->batch->count;
+}
+
 static uint32_t expiration(const knot_rrset_t *rrsigs, uint16_t type)
 {
 	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
@@ -502,6 +507,14 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 	assert(policy);
 	assert(old_rrsigs);
 	assert(policy->batch);
+
+	/* SOA changes every time, use only one batch interval as lifetime
+	 * of its RRSIGs, it will be resigned anyway.
+	 */
+	if (type == KNOT_RRTYPE_SOA) {
+		policy->batch->current = batch_lifetime_soa(policy);
+		return;
+	}
 
 	uint32_t rrsig_ex = 0;
 	if (old_rrsigs->owner != NULL) {
