@@ -274,11 +274,8 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 
 	if (policy->batch->current > 0) {
 		sig_expire = policy->batch->current;
-		printf("Using expiration: %u (rel: %u), min: %u (rel: %u)\n",
-		       sig_expire, sig_expire - policy->now,
-		       *min_expire, *min_expire - policy->now);
 	} else {
-		/* TODO[jitter] Remove this assert. */
+		/* TODO[jitter] Remove this assert and this whole branch. */
 		assert(0);
 		sig_expire += policy->sign_lifetime;
 	}

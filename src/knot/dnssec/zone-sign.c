@@ -314,7 +314,6 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
 
 		if (valid_signature_exists(covered, rrsigs, &key->dnssec_key,
 		                           key->context, policy, min_expire)) {
-			printf("Valid signature, no signing.\n");
 			continue;
 		}
 
@@ -322,7 +321,6 @@ static int add_missing_rrsigs(const knot_rrset_t *covered,
 			to_add = create_empty_rrsigs_for(covered);
 		}
 
-		printf("Signing RRSet.\n");
 		result = knot_sign_rrset(&to_add, covered, &key->dnssec_key,
 		                         key->context, policy, min_expire);
 		if (result != KNOT_EOK) {
@@ -517,22 +515,14 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 		// No old RRSIGs => move to next batch, counted from 1. */
 		next_batch(policy->batch);
 		policy->batch->current = batch_lifetime(policy);
-		printf("No RRSIGs => next batch #: %u, expiration: %u (rel: %u)\n",
-		       policy->batch->cur_nr, policy->batch->current,
-		       policy->batch->current - policy->now);
 	} else {
-		printf("Existing RRSIG => reusing batch...");
 		// RRSet already in zone, retain its batch
 		policy->batch->current = rrsig_ex;
 
 		// If expired, extend by whole lifetime
 		while (policy->batch->current <= policy->now + policy->refresh) {
-			printf("Expired RRSIG...");
 			policy->batch->current += policy->sign_lifetime;
 		}
-
-		printf("Batch expire: %u (rel: %u)\n", policy->batch->current,
-		       policy->batch->current - policy->now);
 
 		/* TODO[jitter] Remove this assert. */
 		assert(policy->batch->first == 0
@@ -560,12 +550,6 @@ static void assign_batch(const zone_contents_t *old_zone,
 	if (old_node) {
 		 old_rrsigs = node_rrset(old_node, KNOT_RRTYPE_RRSIG);
 	}
-
-	char name[255];
-	char type[10];
-	knot_dname_to_str(name, chg_rrset->owner, 255);
-	knot_rrtype_to_string(chg_rrset->type, type, 10);
-	printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
 
 	assign_batch_for_rrset(policy, &old_rrsigs, chg_rrset->type);
 }
@@ -607,12 +591,6 @@ static int sign_node_rrsets(const zone_node_t *node,
 		if (!should_sign) {
 			continue;
 		}
-
-		char name[255];
-		char type[10];
-		knot_dname_to_str(name, rrset.owner, 255);
-		knot_rrtype_to_string(rrset.type, type, 10);
-		printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
 
 		assign_batch_for_rrset(policy, &rrsigs, rrset.type);
 
@@ -1000,7 +978,6 @@ static int update_dnskeys_rrsigs(const knot_rrset_t *dnskeys,
 		}
 	}
 
-	printf("Assigning batch for DNSKEYs\n");
 	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_DNSKEY);
 
 	result = add_missing_rrsigs(&new_dnskeys, NULL, zone_keys, policy,
@@ -1083,7 +1060,6 @@ static int update_dnskeys(const zone_contents_t *zone,
 							      min_expire));
 		knot_rdataset_clear(&dnskey_rrsig.rrs, NULL);
 		if (!modified && signatures_exist) {
-			printf("Valid signatures, skipping.\n");
 			return KNOT_EOK;
 		}
 	}
@@ -1230,12 +1206,6 @@ static int sign_changeset_wrap(knot_rrset_t *chg_rrset,
 		if (ret != KNOT_EOK) {
 			return ret;
 		}
-
-		char name[255];
-		char type[10];
-		knot_dname_to_str(name, chg_rrset->owner, 255);
-		knot_rrtype_to_string(chg_rrset->type, type, 10);
-		printf("Assigning batch for RRSet: owner: %s, type: %s\n", name, type);
 
 		assign_batch_for_rrset(args->policy, &rrsigs, chg_rrset->type);
 
@@ -1416,7 +1386,6 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 	}
 
 	// assign batch to the SOA RRSet
-	printf("Assigning batch for SOA.\n");
 	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA);
 
 	// copy old SOA and create new SOA with updated serial

@@ -99,12 +99,6 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	policy->batch->first = get_first_batch(policy, zone, force);
 	assert(policy->batch->first > policy->now);
 
-	printf("Initialized policy: batch count: %u, lifetime: %u, now: %u "
-	       "refresh: %u, first batch: %u (rel: %u)\n",
-	       policy->batch->count, policy->sign_lifetime, policy->now,
-	       policy->refresh, policy->batch->first,
-	       policy->batch->first - policy->now);
-
 	return KNOT_EOK;
 }
 
@@ -169,8 +163,6 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		knot_free_zone_keys(&zone_keys);
 		assert(changeset_empty(out_ch));
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
-		printf("Refresh will be planned for: %u (rel %u)\n",
-		       *refresh_at, *refresh_at - policy.now);
 		return KNOT_EOK;
 	}
 
@@ -189,23 +181,15 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 
 	// DNSKEY updates
 	uint32_t dnskey_update = knot_get_next_zone_key_event(&zone_keys);
-	printf("Zone sign complete. "
-	       "DNSKEY event: %u, first batch: %u (rel: %u), min expire: %u (rel: %u)\n",
-	       dnskey_update, policy.batch->first, policy.batch->first - policy.now,
-	       min_expire, min_expire - policy.now);
 	if (min_expire < dnskey_update) {
 		// Signatures expire before keys do
 		assert(policy.batch->first != 0);
 		assert(min_expire <= policy.batch->first);
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 	} else {
-		printf("Keys expire before signatures: %u\n", dnskey_update);
 		// Keys expire before signatures
 		*refresh_at = dnskey_update;
 	}
-
-	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,
-	       *refresh_at - policy.now);
 
 	knot_free_zone_keys(&zone_keys);
 	dbg_dnssec_detail("zone signed: changes=%zu\n", changeset_size(out_ch));
@@ -314,9 +298,6 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	assert(policy.batch->first != 0);
 	assert(policy.batch->first > policy.now);
 	*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
-
-	printf("Refresh planned for: %u (relative: %u)\n", *refresh_at,
-	       *refresh_at - policy.now);
 
 	return KNOT_EOK;
 }
