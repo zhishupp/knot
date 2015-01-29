@@ -1075,14 +1075,17 @@ static int update_dnskeys(const zone_contents_t *zone,
 		}
 	}
 
-	bool modified = (changeset_size(changeset) != changes_before);
-	bool signatures_exist = (!knot_rrset_empty(&dnskeys) &&
-	                         all_signatures_exist(&dnskeys, &dnskey_rrsig,
-	                                              zone_keys, policy,
-	                                              min_expire));
-	knot_rdataset_clear(&dnskey_rrsig.rrs, NULL);
-	if (!modified && signatures_exist) {
-		return KNOT_EOK;
+	if (!policy->forced_sign) {
+		bool modified = (changeset_size(changeset) != changes_before);
+		bool signatures_exist = (!knot_rrset_empty(&dnskeys) &&
+					 all_signatures_exist(&dnskeys, &dnskey_rrsig,
+							      zone_keys, policy,
+							      min_expire));
+		knot_rdataset_clear(&dnskey_rrsig.rrs, NULL);
+		if (!modified && signatures_exist) {
+			printf("Valid signatures, skipping.\n");
+			return KNOT_EOK;
+		}
 	}
 
 	dbg_dnssec_detail("Creating new signatures for DNSKEYs\n");
