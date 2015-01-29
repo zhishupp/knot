@@ -286,14 +286,13 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 
 	knot_free_zone_keys(&zone_keys);
 
-	/* Note[jitter]: Maybe we don't need the earliest expiration. First
-	 *               batch time should be the earliest, everything
-	 *               before that should have been resigned. but is there a
-	 *               way to ensure that? What if the parameters' values
-	 *               change?
-	 *               This approach, with always getting the current minimum
-	 *               expiration time is IMHO safer and it's not a big
-	 *               overhead.
+	/*! \note Maybe we don't need the earliest expiration. First batch time
+	 *        should be the earliest, everything before that should have
+	 *        been resigned. but is there a way to ensure that? What if the
+	 *        parameters' values change?
+	 *        This approach, with always getting the current minimum
+	 *        expiration time is IMHO safer and it's not a big overhead.
+	 * \todo  Remove this note before merging.
 	 */
 	assert(policy.batch->first != 0);
 	assert(policy.batch->first > policy.now);

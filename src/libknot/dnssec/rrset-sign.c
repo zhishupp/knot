@@ -275,7 +275,9 @@ int knot_sign_rrset(knot_rrset_t *rrsigs, const knot_rrset_t *covered,
 	if (policy->batch->current > 0) {
 		sig_expire = policy->batch->current;
 	} else {
-		/* TODO[jitter] Remove this assert and this whole branch. */
+		/*! \todo Probably remove this assert and this whole branch
+		 *        before merging.
+		 */
 		assert(0);
 		sig_expire += policy->sign_lifetime;
 	}

@@ -31,9 +31,6 @@ uint32_t knot_dnssec_policy_refresh_time(const knot_dnssec_policy_t *policy,
 		return 0;
 	}
 
-	printf("Counting refresh time. Earliest expiration: %u.\n",
-	       earliest_expiration - policy->now);
-
 	if (earliest_expiration <= policy->now + policy->refresh) {
 		/* This happens after initial signing if 'refresh' is larger
 		 * than one batch interval.
