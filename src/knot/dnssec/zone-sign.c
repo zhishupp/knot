@@ -473,11 +473,6 @@ static inline uint32_t batch_lifetime(const knot_dnssec_policy_t *policy)
 	                (policy->sign_lifetime / policy->batch->count);
 }
 
-static inline uint32_t batch_lifetime_soa(const knot_dnssec_policy_t *policy)
-{
-	return policy->batch->first + policy->sign_lifetime / policy->batch->count;
-}
-
 static uint32_t expiration(const knot_rrset_t *rrsigs, uint16_t type)
 {
 	for (uint16_t i = 0; i < rrsigs->rrs.rr_count; ++i) {
@@ -507,14 +502,6 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 	assert(policy);
 	assert(old_rrsigs);
 	assert(policy->batch);
-
-	/* SOA changes every time, use only one batch interval as lifetime
-	 * of its RRSIGs, it will be resigned anyway.
-	 */
-	if (type == KNOT_RRTYPE_SOA) {
-		policy->batch->current = batch_lifetime_soa(policy);
-		return;
-	}
 
 	uint32_t rrsig_ex = 0;
 	if (old_rrsigs->owner != NULL) {
@@ -1365,7 +1352,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
                               uint32_t new_serial,
-                              changeset_t *changeset, uint32_t *min_expire)
+                              changeset_t *changeset, uint32_t min_expire)
 {
 	if (knot_rrset_empty(soa) || !zone_keys || !policy || !changeset) {
 		return KNOT_EINVAL;
@@ -1398,8 +1385,10 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 		}
 	}
 
-	// assign batch to the SOA RRSet
-	assign_batch_for_rrset(policy, rrsigs, KNOT_RRTYPE_SOA);
+	/* SOA changes every time, use minimum zone expiration, it will be 
+	 * resigned then anyway.
+	 */
+	policy->batch->current = min_expire;
 
 	// copy old SOA and create new SOA with updated serial
 
@@ -1421,13 +1410,16 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 
 	// add signatures for new SOA
 
+	uint32_t min_ex = min_expire;
 	result = add_missing_rrsigs(soa_to, NULL, zone_keys, policy, changeset,
-	                            min_expire);
+	                            &min_ex);
 	if (result != KNOT_EOK) {
 		knot_rrset_free(&soa_from, NULL);
 		knot_rrset_free(&soa_to, NULL);
 		return result;
 	}
+	
+	assert(min_ex == min_expire);
 
 	// save the result
 

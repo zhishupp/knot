@@ -77,7 +77,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa, const knot_rrset_t *rrsig
                               const knot_zone_keys_t *zone_keys,
                               const knot_dnssec_policy_t *policy,
                               uint32_t new_serial, changeset_t *changeset,
-                              uint32_t *min_expire);
+                              uint32_t min_expire);
 
 /*!
  * \brief Check if zone SOA signatures are expired.

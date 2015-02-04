@@ -117,6 +117,7 @@ const error_table_t error_messages[] = {
 	{ KNOT_DNSSEC_ENOKEY,                     "no keys for signing" },
 	{ KNOT_DNSSEC_ENOKEYDIR,                  "keydir does not exist" },
 	{ KNOT_DNSSEC_EMISSINGKEYTYPE,            "missing active KSK or ZSK" },
+	{ KNOT_DNSSEC_EVALUE,                     "invalid DNSSEC settings"},
 
 	/* NSEC3 errors. */
 	{ KNOT_NSEC3_ECOMPUTE_HASH, "cannot compute NSEC3 hash" },

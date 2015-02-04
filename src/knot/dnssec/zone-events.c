@@ -90,6 +90,13 @@ static int init_dnssec_structs(const zone_contents_t *zone,
 	// Override signature lifetime, if set in config
 	//! \todo Later: also override 'refresh' interval if set in config.
 	if (config->sig_lifetime > 0) {
+		if (config->sig_lifetime <= KNOT_DNSSEC_MIN_REFRESH) {
+			log_zone_error(zone->apex->owner, 
+			               "DNSSEC, lifetime must be larger than refresh interval (%u)",
+			               KNOT_DNSSEC_MIN_REFRESH);
+			knot_free_zone_keys(zone_keys);
+			return KNOT_DNSSEC_EVALUE;
+		}
 		knot_dnssec_policy_set_sign_lifetime(policy,
 		                                     config->sig_lifetime,
 		                                     policy->refresh);
@@ -171,7 +178,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	assert(!knot_rrset_empty(&soa));
 	result = knot_zone_sign_update_soa(&soa, &rrsigs, &zone_keys, &policy,
-	                                   new_serial, out_ch, &min_expire);
+	                                   new_serial, out_ch, min_expire);
 	if (result != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, not signing, failed to update "
 		               "SOA record (%s)", knot_strerror(result));
@@ -276,7 +283,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	knot_rrset_t soa = node_rrset(zone->apex, KNOT_RRTYPE_SOA);
 	knot_rrset_t rrsigs = node_rrset(zone->apex, KNOT_RRTYPE_RRSIG);
 	ret = knot_zone_sign_update_soa(&soa, &rrsigs, &zone_keys, &policy,
-	                                new_serial, out_ch, &min_expire);
+	                                new_serial, out_ch, min_expire);
 	if (ret != KNOT_EOK) {
 		log_zone_error(zone_name, "DNSSEC, failed to sign SOA record (%s)",
 		               knot_strerror(ret));
