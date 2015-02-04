@@ -185,15 +185,13 @@ static const knot_zone_key_t *get_matching_zone_key(const knot_rrset_t *rrsigs,
  * \param expires_at  Current earliest expiration, will be updated.
  */
 static void note_earliest_expiration(const knot_rrset_t *rrsigs, size_t pos,
-                                     uint32_t *expires_at)
+                                     uint32_t *min_expire)
 {
 	assert(rrsigs);
-	assert(expires_at);
+	assert(min_expire);
 
 	const uint32_t current = knot_rrsig_sig_expiration(&rrsigs->rrs, pos);
-	if (current < *expires_at) {
-		*expires_at = current;
-	}
+	*min_expire = MIN(*min_expire, current);
 }
 
 /*!
@@ -213,7 +211,7 @@ static int remove_expired_rrsigs(const knot_rrset_t *covered,
                                  const knot_zone_keys_t *zone_keys,
                                  const knot_dnssec_policy_t *policy,
                                  changeset_t *changeset,
-                                 uint32_t *expires_at)
+                                 uint32_t *min_expire)
 {
 	assert(changeset);
 
@@ -250,7 +248,7 @@ static int remove_expired_rrsigs(const knot_rrset_t *covered,
 			                                 key->context, policy);
 			if (result == KNOT_EOK) {
 				// valid signature
-				note_earliest_expiration(&synth_rrsig, i, expires_at);
+				note_earliest_expiration(&synth_rrsig, i, min_expire);
 				continue;
 			}
 
@@ -617,7 +615,7 @@ typedef struct node_sign_args {
 	const knot_zone_keys_t *zone_keys;
 	const knot_dnssec_policy_t *policy;
 	changeset_t *changeset;
-	uint32_t expires_at;
+	uint32_t min_expire;
 } node_sign_args_t;
 
 /*!
@@ -642,7 +640,7 @@ static int sign_node(zone_node_t **node, void *data)
 	}
 
 	int result = sign_node_rrsets(*node, args->zone_keys, args->policy,
-	                              args->changeset, &args->expires_at);
+	                              args->changeset, &args->min_expire);
 	(*node)->flags &= ~NODE_FLAGS_REMOVED_NSEC;
 
 	return result;
@@ -673,11 +671,11 @@ static int zone_tree_sign(zone_tree_t *tree,
 		.zone_keys = zone_keys,
 		.policy = policy,
 		.changeset = changeset,
-		.expires_at = time(NULL) + policy->sign_lifetime
+		.min_expire = UINT32_MAX
 	};
 
 	int result = zone_tree_apply(tree, sign_node, &args);
-	*expires_at = args.expires_at;
+	*expires_at = args.min_expire;
 
 	return result;
 }

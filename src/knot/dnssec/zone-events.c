@@ -138,7 +138,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	}
 
 	// Expiration must be an absolute value
-	uint32_t min_expire = policy.now + policy.sign_lifetime;
+	uint32_t min_expire = UINT32_MAX;
 
 	// generate NSEC records
 	result = knot_zone_create_nsec_chain(zone, out_ch, &zone_keys, &policy,
@@ -195,6 +195,7 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 	} else {
 		// Keys expire before signatures
+		//! \todo Shouldn't this also be lowered by refresh interval?
 		*refresh_at = dnskey_update;
 	}
 
@@ -257,7 +258,7 @@ int knot_dnssec_sign_changeset(const zone_contents_t *zone,
 	}
 
 	// Expiration must be an absolute value
-	uint32_t min_expire = policy.now + policy.sign_lifetime;
+	uint32_t min_expire = UINT32_MAX;
 
 	// Sign added and removed RRSets in changeset
 	ret = knot_zone_sign_changeset(zone, in_ch, out_ch,
