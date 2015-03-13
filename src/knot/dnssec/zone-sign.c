@@ -1386,7 +1386,8 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 	/* SOA changes every time, use minimum zone expiration, it will be 
 	 * resigned then anyway.
 	 */
-	policy->batch->current = min_expire;
+	policy->batch->current = min_expire == UINT32_MAX 
+	                ? policy->batch->first : min_expire;
 
 	// copy old SOA and create new SOA with updated serial
 
@@ -1417,7 +1418,7 @@ int knot_zone_sign_update_soa(const knot_rrset_t *soa,
 		return result;
 	}
 	
-	assert(min_ex == min_expire);
+	assert(min_ex == min_expire || min_ex == policy->batch->first);
 
 	// save the result
 
