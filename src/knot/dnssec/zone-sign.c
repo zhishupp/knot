@@ -521,11 +521,6 @@ static void assign_batch_for_rrset(const knot_dnssec_policy_t *policy,
 		while (policy->batch->current <= policy->now + policy->refresh) {
 			policy->batch->current += policy->sign_lifetime;
 		}
-
-		/*! \todo Probably remove this assert before merging. */
-		assert(policy->batch->first == 0
-		       || (policy->batch->current - policy->batch->first)
-		          % (policy->sign_lifetime / policy->batch->count) == 0);
 	}
 }
 

@@ -191,7 +191,6 @@ static int zone_sign(zone_contents_t *zone, const conf_zone_t *zone_config,
 	if (min_expire < dnskey_update) {
 		// Signatures expire before keys do
 		assert(policy.batch->first != 0);
-		assert(min_expire <= policy.batch->first);
 		*refresh_at = knot_dnssec_policy_refresh_time(&policy, min_expire);
 	} else {
 		// Keys expire before signatures
