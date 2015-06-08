@@ -54,7 +54,8 @@ check_PROGRAMS = \
 	zone_timers			\
 	zone_update			\
 	zonedb				\
-	ztree
+	ztree \
+	zone_events_wrap
 
 check-compile-only: $(check_PROGRAMS)
 
@@ -64,6 +65,12 @@ check-local: $(check_PROGRAMS)
 					-L $(top_builddir)/tests/runtests.log \
 					$(check_PROGRAMS)
 
+
+zone_events_wrap_LDFLAGS = $(AM_LDFLAGS)   -Wl,--wrap=worker_pool_assign \
+				-Wl,--wrap=evsched_schedule \
+				-Wl,--wrap=get_event_info \
+				-Wl,--wrap=event_reload \
+				-Wl,--wrap=event_refresh
 acl_SOURCES = acl.c test_conf.h
 conf_SOURCES = conf.c test_conf.h
 process_query_SOURCES = process_query.c fake_server.h test_conf.h
