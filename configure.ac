@@ -114,6 +114,9 @@ AS_IF([test "$enable_fastparser" = "yes"],[
 
 AM_CONDITIONAL([FAST_PARSER], [test "$enable_fastparser" = "yes"])
 
+# cmocka testing library
+PKG_CHECK_MODULES([cmocka], [cmocka >= 1.0.1])
+
 # GnuTLS crypto backend
 PKG_CHECK_MODULES([gnutls], [gnutls >= 3.0 nettle])
 

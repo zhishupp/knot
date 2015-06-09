@@ -66,7 +66,7 @@ check-local: $(check_PROGRAMS)
 					$(check_PROGRAMS)
 
 
-zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) -lcmocka \
+zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)\
 	-Wl,--wrap=worker_pool_assign -Wl,--wrap=worker_pool_assignlog_msg_zone \
 	-Wl,--wrap=evsched_schedule -Wl,--wrap=evsched_cancel \
 	-Wl,--wrap=get_event_info -Wl,--wrap=log_msg_zone\
@@ -74,6 +74,9 @@ zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) -lcmocka \
 	-Wl,--wrap=event_xfer -Wl,--wrap=event_update \
 	-Wl,--wrap=event_expire -Wl,--wrap=event_flush \
 	-Wl,--wrap=event_notify -Wl,--wrap=event_dnssec
+zone_events_wrap_CFLAGS = $(AM_CFLAGS) $(cmocka_CFLAGS)
+
+
 
 acl_SOURCES = acl.c test_conf.h
 conf_SOURCES = conf.c test_conf.h
