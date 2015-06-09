@@ -66,11 +66,15 @@ check-local: $(check_PROGRAMS)
 					$(check_PROGRAMS)
 
 
-zone_events_wrap_LDFLAGS = $(AM_LDFLAGS)   -Wl,--wrap=worker_pool_assign \
-				-Wl,--wrap=evsched_schedule \
-				-Wl,--wrap=get_event_info \
-				-Wl,--wrap=event_reload \
-				-Wl,--wrap=event_refresh
+zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) -lcmocka \
+	-Wl,--wrap=worker_pool_assign -Wl,--wrap=worker_pool_assignlog_msg_zone \
+	-Wl,--wrap=evsched_schedule -Wl,--wrap=evsched_cancel \
+	-Wl,--wrap=get_event_info -Wl,--wrap=log_msg_zone\
+	-Wl,--wrap=event_reload -Wl,--wrap=event_refresh \
+	-Wl,--wrap=event_xfer -Wl,--wrap=event_update \
+	-Wl,--wrap=event_expire -Wl,--wrap=event_flush \
+	-Wl,--wrap=event_notify -Wl,--wrap=event_dnssec
+
 acl_SOURCES = acl.c test_conf.h
 conf_SOURCES = conf.c test_conf.h
 process_query_SOURCES = process_query.c fake_server.h test_conf.h
