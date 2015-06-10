@@ -90,7 +90,7 @@ void key_init_sha1(void **state)
 	assert_int_equal(r, KNOT_EOK);
 	assert_int_equal(key->algorithm, DNSSEC_TSIG_HMAC_SHA1);
 	assert_string_equal(key->name, (uint8_t *)"\x4""knot""\x3""dns");
-	assert_memory_equal(key->secret.data, (uint8_t *)"secret", 7);
+	assert_memory_equal(key->secret.data, (uint8_t *)"secret", 6);
 }
 
 void key_init_str_missing_value(void **state)
