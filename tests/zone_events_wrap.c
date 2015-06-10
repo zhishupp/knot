@@ -72,7 +72,7 @@ typedef struct test_context  {
 	evsched_t sched;
 	worker_pool_t *pool;
 	zone_t zone;
-} test_context _t;
+} test_context_t;
 
 //! \brief create test context
 int setup(void **state)
@@ -80,12 +80,12 @@ int setup(void **state)
 	ev_scheduled = NULL;
 	task_assigned = NULL;
 
-	*state = malloc(sizeof(test_context _t));
+	*state = malloc(sizeof(test_context_t));
 	if (state == NULL) {
 		return 1;
 	}
 
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	evsched_init(&ctx->sched, NULL);
 
@@ -106,7 +106,7 @@ int setup(void **state)
 //! \brief destroy test context
 int teardown(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value(__wrap_evsched_cancel, ev, ctx->zone.events.event);
 	zone_events_deinit(&ctx->zone);
@@ -120,7 +120,7 @@ int teardown(void **state)
 
 void one_correct_task_scheduled(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value(__wrap_evsched_schedule, dt, 10 * 1000);
 	zone_events_schedule(&ctx->zone, ZONE_EVENT_RELOAD, 10);
@@ -137,7 +137,7 @@ void one_correct_task_scheduled(void **state)
 //! \brief second task is scheduled before the first
 void two_correct_task_scheduled(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value(__wrap_evsched_schedule, dt, 10 * 1000);
 	zone_events_schedule(&ctx->zone, ZONE_EVENT_RELOAD, 10);
@@ -164,7 +164,7 @@ void two_correct_task_scheduled(void **state)
 
 void double_call_event_wrap(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value(__wrap_evsched_schedule, dt, 10 * 1000);
 	zone_events_schedule(&ctx->zone, ZONE_EVENT_RELOAD, 10);
@@ -197,7 +197,7 @@ void double_call_event_wrap(void **state)
  */
 void all_events(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value_count(__wrap_evsched_schedule, dt, 1000, -1);
 
@@ -217,7 +217,7 @@ void all_events(void **state)
 
 void freeze(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	expect_value(__wrap_evsched_cancel, ev, ctx->zone.events.event);
 
@@ -232,7 +232,7 @@ void freeze(void **state)
 
 void zone_events_enqueue_running(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 	time_t now = time(NULL);
 
 	expect_value(__wrap_evsched_schedule, dt, 0);
@@ -258,7 +258,7 @@ void zone_events_enqueue_running(void **state)
 
 void zone_events_enqueue_not_running(void **state)
 {
-	test_context _t *ctx = *state;
+	test_context_t *ctx = *state;
 
 	zone_events_enqueue(&ctx->zone, ZONE_EVENT_EXPIRE);
 
