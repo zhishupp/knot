@@ -54,8 +54,9 @@ check_PROGRAMS = \
 	zone_timers			\
 	zone_update			\
 	zonedb				\
-	ztree \
-	zone_events_wrap
+	ztree				\
+	zone_events_wrap		\
+	tsig_key_cmocka
 
 check-compile-only: $(check_PROGRAMS)
 
@@ -76,7 +77,8 @@ zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)\
 	-Wl,--wrap=event_notify -Wl,--wrap=event_dnssec
 zone_events_wrap_CFLAGS = $(AM_CFLAGS) $(cmocka_CFLAGS)
 
-
+tsig_key_cmocka_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)
+tsig_key_cmocka_CFLAGS = $(AM_CFLAGS) $(cmocka_CFLAGS)
 
 acl_SOURCES = acl.c test_conf.h
 conf_SOURCES = conf.c test_conf.h
