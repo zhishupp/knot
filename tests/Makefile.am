@@ -9,7 +9,7 @@ LDADD = \
 	$(top_builddir)/src/libknot.la \
 	$(top_builddir)/src/libknotd.la \
 	$(libcrypto_LIBS)
-AM_CFLAGS =
+AM_CFLAGS = # empty
 
 check_PROGRAMS = \
 	acl				\
@@ -58,11 +58,19 @@ check_PROGRAMS = \
 	ztree				
 
 if USE_cmocka
+if LD_WRAP
 check_PROGRAMS += \
-	zone_events_wrap \
+	zone_events_wrap
+endif
+
+check_PROGRAMS += \
 	tsig_key_cmocka
+
 AM_CFLAGS += $(cmocka_CFLAGS)
 LDADD += $(cmocka_LIBS)
+
+
+
 endif
 check-compile-only: $(check_PROGRAMS)
 

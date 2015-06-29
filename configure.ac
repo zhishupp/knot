@@ -115,9 +115,13 @@ AS_IF([test "$enable_fastparser" = "yes"],[
 AM_CONDITIONAL([FAST_PARSER], [test "$enable_fastparser" = "yes"])
 
 # cmocka testing library
-PKG_CHECK_MODULES([cmocka], [cmocka >= 1.0.1], [HAVE_cmocka=1], [HAVE_cmocka=0])
+PKG_CHECK_MODULES([cmocka], [cmocka >= 1.0.0], [HAVE_cmocka=1], [HAVE_cmocka=0])
 # provides variable for conditional build tests with cmocka
 AM_CONDITIONAL([USE_cmocka], [test "$HAVE_cmocka" -eq 1])
+
+# check for GNU linker. GNU ld has wrapping.
+LT_PATH_LD
+AM_CONDITIONAL([LD_WRAP], [test "$with_gnu_ld" = "yes"])
 
 # GnuTLS crypto backend
 PKG_CHECK_MODULES([gnutls], [gnutls >= 3.0 nettle])
@@ -455,6 +459,8 @@ AC_CONFIG_FILES([Makefile
 		 src/dnssec/utils/Makefile
 		 ])
 
+
+
 AC_OUTPUT
 
 AC_MSG_RESULT([
@@ -462,12 +468,14 @@ AC_MSG_RESULT([
 
     Target:   $host_os $host_cpu
     Compiler: ${CC}
+    GNU ld:   ${with_gnu_ld}
     CFLAGS:   ${CFLAGS} ${CPPFLAGS}
     LIBS:     ${LIBS} ${LDFLAGS}
     LibURCU:  ${liburcu_LIBS} ${liburcu_CFLAGS}
     GnuTLS:   ${gnutls_LIBS} ${gnutls_CFLAGS}
     Jansson:  ${jansson_LIBS} ${jansson_CFLAGS}
     LMDB:     ${enable_lmdb} ${lmdb_LIBS} ${lmdb_CFLAGS}
+    cmocka:   ${cmocka_LIBS} ${cmocka_CFLAGS}
 
     Prefix:      ${prefix}
     Run dir:     ${run_dir}
