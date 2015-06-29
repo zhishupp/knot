@@ -9,6 +9,7 @@ LDADD = \
 	$(top_builddir)/src/libknot.la \
 	$(top_builddir)/src/libknotd.la \
 	$(libcrypto_LIBS)
+AM_CFLAGS =
 
 check_PROGRAMS = \
 	acl				\
