@@ -54,10 +54,15 @@ check_PROGRAMS = \
 	zone_timers			\
 	zone_update			\
 	zonedb				\
-	ztree				\
-	zone_events_wrap		\
-	tsig_key_cmocka
+	ztree				
 
+if USE_cmocka
+check_PROGRAMS += \
+	zone_events_wrap \
+	tsig_key_cmocka
+AM_CFLAGS += $(cmocka_CFLAGS)
+LDADD += $(cmocka_LIBS)
+endif
 check-compile-only: $(check_PROGRAMS)
 
 check-local: $(check_PROGRAMS)
@@ -66,8 +71,8 @@ check-local: $(check_PROGRAMS)
 					-L $(top_builddir)/tests/runtests.log \
 					$(check_PROGRAMS)
 
-
-zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)\
+# wrapping
+zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) \
 	-Wl,--wrap=worker_pool_assign -Wl,--wrap=worker_pool_assignlog_msg_zone \
 	-Wl,--wrap=evsched_schedule -Wl,--wrap=evsched_cancel \
 	-Wl,--wrap=get_event_info -Wl,--wrap=log_msg_zone\
@@ -75,10 +80,7 @@ zone_events_wrap_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)\
 	-Wl,--wrap=event_xfer -Wl,--wrap=event_update \
 	-Wl,--wrap=event_expire -Wl,--wrap=event_flush \
 	-Wl,--wrap=event_notify -Wl,--wrap=event_dnssec
-zone_events_wrap_CFLAGS = $(AM_CFLAGS) $(cmocka_CFLAGS)
 
-tsig_key_cmocka_LDFLAGS = $(AM_LDFLAGS) $(cmocka_LIBS)
-tsig_key_cmocka_CFLAGS = $(AM_CFLAGS) $(cmocka_CFLAGS)
 
 acl_SOURCES = acl.c test_conf.h
 conf_SOURCES = conf.c test_conf.h
