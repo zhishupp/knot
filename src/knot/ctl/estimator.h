@@ -60,7 +60,7 @@ void *estimator_malloc(void* ctx, size_t len);
  *
  * \param p Data to free.
  */
-void estimator_free(void *p);
+void estimator_free(void* ctx, void *p);
 
 /*!
  * \brief Goes through trie's ahtables and estimates their memory requirements.

@@ -59,7 +59,7 @@ struct hattrie_t_
 /* Create an empty trie node. */
 static trie_node_t* alloc_empty_node(hattrie_t* T)
 {
-    trie_node_t* node = T->mm.alloc(T->mm.ctx, sizeof(trie_node_t));
+    trie_node_t* node = mm_alloc(&T->mm, sizeof(trie_node_t));
     node->flag = NODE_TYPE_TRIE;
     node->val  = 0;
 
@@ -71,7 +71,7 @@ static trie_node_t* alloc_empty_node(hattrie_t* T)
  * can be NULL). */
 static trie_node_t* alloc_trie_node(hattrie_t* T, node_ptr child)
 {
-    trie_node_t* node = T->mm.alloc(T->mm.ctx, sizeof(trie_node_t));
+    trie_node_t* node = mm_alloc(&T->mm, sizeof(trie_node_t));
     node->flag = NODE_TYPE_TRIE;
     node->val  = 0;
 
@@ -278,7 +278,7 @@ static void hattrie_initroot(hattrie_t *T)
 }
 
 /* Free hat-trie nodes recursively. */
-static void hattrie_free_node(node_ptr node, mm_free_t free_cb)
+static void hattrie_free_node(node_ptr node, mm_ctx_t *mm)
 {
     if (*node.flag & NODE_TYPE_TRIE) {
         size_t i;
@@ -289,10 +289,9 @@ static void hattrie_free_node(node_ptr node, mm_free_t free_cb)
             /* XXX: recursion might not be the best choice here. It is possible
              * to build a very deep trie. */
             if (node.t->xs[i].t)
-                hattrie_free_node(node.t->xs[i], free_cb);
+                hattrie_free_node(node.t->xs[i], mm);
         }
-        if (free_cb)
-            free_cb(node.t);
+        mm_free(mm, node.t);
     }
     else {
         hhash_free(node.b);
@@ -311,7 +310,7 @@ static void hattrie_init(hattrie_t * T, unsigned bucket_size)
 static void hattrie_deinit(hattrie_t * T)
 {
     if (T->bsize > 0 || T->mm.free)
-        hattrie_free_node(T->root, T->mm.free);
+        hattrie_free_node(T->root, &T->mm);
 }
 
 hattrie_t* hattrie_create()
@@ -327,8 +326,7 @@ void hattrie_free(hattrie_t* T)
         return;
     }
     hattrie_deinit(T);
-    if (T->mm.free)
-        T->mm.free(T);
+    mm_free(&T->mm, T);
 }
 
 void hattrie_clear(hattrie_t* T)

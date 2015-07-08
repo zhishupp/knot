@@ -23,6 +23,21 @@
 
 #define CPU_STRUCT_ALIGN (sizeof(void*))
 
+#define VALGRIND_INSTRUMENT
+#ifdef VALGRIND_INSTRUMENT
+#define REDZONE CPU_STRUCT_ALIGN
+#include <valgrind/memcheck.h>
+#else
+#define REDZONE 0
+#define VALGRIND_MEMPOOL_ALLOC(a, b, c)
+#define VALGRIND_MALLOCLIKE_BLOCK(a, b, c, d)
+#define VALGRIND_FREELIKE_BLOCK(a, b)
+#define VALGRIND_CREATE_MEMPOOL(a, b, c)
+#define VALGRIND_DESTROY_MEMPOOL(a)
+#define VALGRIND_MAKE_MEM_NOACCESS(a, b)
+#define VALGRIND_MAKE_MEM_DEFINED(a, b)
+#endif
+
 /***
  * [[defs]]
  * Definitions
@@ -140,13 +155,16 @@ void *mp_alloc_zero(struct mempool *pool, unsigned size);
 static inline void *mp_alloc_fast(struct mempool *pool, unsigned size)
 {
   unsigned avail = pool->state.free[0] & ~(CPU_STRUCT_ALIGN - 1);
+  size += 2 * REDZONE;
+  void *p;
   if (size <= avail)
     {
-      pool->state.free[0] = avail - size;
-      return (uint8_t*)pool->state.last[0] - avail;
+      pool->state.free[0] = avail - (size);
+      p = (uint8_t *)pool->state.last[0] - avail;
     }
   else
-    return mp_alloc_internal(pool, size);
+    p = mp_alloc_internal(pool, size);
+  return p + REDZONE;
 }
 
 /**
@@ -154,14 +172,19 @@ static inline void *mp_alloc_fast(struct mempool *pool, unsigned size)
  **/
 static inline void *mp_alloc_fast_noalign(struct mempool *pool, unsigned size)
 {
+  void *ptr;
+  size += 2 * REDZONE;
   if (size <= pool->state.free[0])
     {
-      void *ptr = (uint8_t*)pool->state.last[0] - pool->state.free[0];
+      ptr = (uint8_t *)pool->state.last[0] - pool->state.free[0];
       pool->state.free[0] -= size;
+
       return ptr;
     }
   else
-    return mp_alloc_internal(pool, size);
+    ptr = mp_alloc_internal(pool, size);
+
+  return ptr + REDZONE;
 }
 
 /***

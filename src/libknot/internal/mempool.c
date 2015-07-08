@@ -48,6 +48,7 @@ page_alloc(uint64_t len)
   uint8_t *p = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
   if (p == (uint8_t*) MAP_FAILED)
     return NULL;
+  VALGRIND_MALLOCLIKE_BLOCK(p, len, 0, 0);
   return p;
 }
 
@@ -57,6 +58,7 @@ page_free(void *start, uint64_t len)
   assert(!(len & (CPU_PAGE_SIZE-1)));
   assert(!((uintptr_t) start & (CPU_PAGE_SIZE-1)));
   munmap(start, len);
+  VALGRIND_FREELIKE_BLOCK(start, 0);
 }
 #endif
 
@@ -91,6 +93,7 @@ mp_new_big_chunk(unsigned size)
   struct mempool_chunk *chunk;
   chunk = xmalloc(size + MP_CHUNK_TAIL) + size;
   chunk->size = size;
+  VALGRIND_MAKE_MEM_NOACCESS((void*)chunk - chunk->size, chunk->size);
   return chunk;
 }
 
@@ -107,6 +110,7 @@ mp_new_chunk(unsigned size)
   struct mempool_chunk *chunk;
   chunk = page_alloc(size + MP_CHUNK_TAIL) + size;
   chunk->size = size;
+  VALGRIND_MAKE_MEM_NOACCESS((void*)chunk - chunk->size, chunk->size);
   return chunk;
 #else
   return mp_new_big_chunk(size);
@@ -131,11 +135,13 @@ mp_new(unsigned chunk_size)
   struct mempool *pool = (void *)chunk - chunk_size;
   DBG("Creating mempool %p with %u bytes long chunks", pool, chunk_size);
   chunk->next = NULL;
+  VALGRIND_MAKE_MEM_DEFINED(pool, sizeof(struct mempool));
   *pool = (struct mempool) {
     .state = { .free = { chunk_size - sizeof(*pool) }, .last = { chunk } },
     .chunk_size = chunk_size,
     .threshold = chunk_size >> 1,
     .last_big = &pool->last_big };
+  VALGRIND_CREATE_MEMPOOL(pool, REDZONE, 0);
   return pool;
 }
 
@@ -168,6 +174,7 @@ mp_delete(struct mempool *pool)
   mp_free_big_chain(pool->state.last[1]);
   mp_free_chain(pool->unused);
   mp_free_chain(pool->state.last[0]); // can contain the mempool structure
+  VALGRIND_DESTROY_MEMPOOL(pool);
 }
 
 void
@@ -257,7 +264,9 @@ mp_alloc_internal(struct mempool *pool, unsigned size)
 void *
 mp_alloc(struct mempool *pool, unsigned size)
 {
-  return mp_alloc_fast(pool, size);
+  void *p = mp_alloc_fast(pool, size);
+  VALGRIND_MEMPOOL_ALLOC(pool , p, size);
+  return p;
 }
 
 void *

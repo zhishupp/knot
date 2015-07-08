@@ -33,7 +33,7 @@
 
 /* Memory allocation function prototypes. */
 typedef void* (*mm_alloc_t)(void* ctx, size_t len);
-typedef void (*mm_free_t)(void *p);
+typedef void (*mm_free_t)(void *ctx, void *what);
 typedef void (*mm_flush_t)(void *p);
 
 /*! \brief Memory allocation context. */

@@ -20,8 +20,11 @@
 #include "libknot/internal/mempattern.h"
 #include "libknot/internal/mempool.h"
 
-static void mm_nofree(void *p)
+static void mm_nofree(void *ctx, void *p)
 {
+	if (p != NULL) {
+		VALGRIND_MEMPOOL_FREE(ctx, p);
+	}
 	/* nop */
 }
 
@@ -31,10 +34,17 @@ static void *mm_malloc(void *ctx, size_t n)
 	return malloc(n);
 }
 
+static void mm_free_internal(void *ctx, void* what)
+{
+	(void)ctx;
+	return free(what);
+}
+
 void *mm_alloc(mm_ctx_t *mm, size_t size)
 {
 	if (mm) {
-		return mm->alloc(mm->ctx, size);
+		void *p = mm->alloc(mm->ctx, size);
+		return p;
 	} else {
 		return malloc(size);
 	}
@@ -43,7 +53,7 @@ void *mm_alloc(mm_ctx_t *mm, size_t size)
 void *mm_realloc(mm_ctx_t *mm, void *what, size_t size, size_t prev_size)
 {
 	if (mm) {
-		void *p = mm->alloc(mm->ctx, size);
+		void *p = mm_alloc(mm, size);
 		if (p == NULL) {
 			return NULL;
 		} else {
@@ -63,7 +73,7 @@ void mm_free(mm_ctx_t *mm, void *what)
 {
 	if (mm) {
 		if (mm->free) {
-			mm->free(what);
+			mm->free(mm->ctx, what);
 		}
 	} else {
 		free(what);
@@ -74,7 +84,7 @@ void mm_ctx_init(mm_ctx_t *mm)
 {
 	mm->ctx = NULL;
 	mm->alloc = mm_malloc;
-	mm->free = free;
+	mm->free = mm_free_internal;
 }
 
 void mm_ctx_mempool(mm_ctx_t *mm, size_t chunk_size)

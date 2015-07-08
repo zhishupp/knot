@@ -128,8 +128,9 @@ void *estimator_malloc(void *ctx, size_t len)
 	return xmalloc(len);
 }
 
-void estimator_free(void *p)
+void estimator_free(void *ctx, void *p)
 {
+	(void) ctx;
 	free(p);
 }
 
