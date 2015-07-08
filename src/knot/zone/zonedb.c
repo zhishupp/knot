@@ -211,7 +211,7 @@ void knot_zonedb_free(knot_zonedb_t **db)
 		return;
 	}
 
-	//mp_delete((*db)->mm.ctx);
+	mp_delete((*db)->mm.ctx);
 	*db = NULL;
 }
 
