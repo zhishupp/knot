@@ -37,7 +37,7 @@ static int conf_db_check(
 	conf_t *conf,
 	namedb_txn_t *txn)
 {
-	int ret = conf->api->count(txn);
+	int ret = namedb_count(conf->db_ctx, txn);
 	if (ret == 0) { // Empty DB.
 		return KNOT_CONF_EMPTY;
 	} else if (ret > 0) { // Check existing DB.
@@ -46,7 +46,7 @@ static int conf_db_check(
 		namedb_val_t data;
 
 		// Get conf-DB version.
-		ret = conf->api->find(txn, &key, &data, 0);
+		ret = namedb_find(conf->db_ctx, txn, &key, &data, 0);
 		if (ret != KNOT_EOK) {
 			return ret;
 		}
@@ -74,11 +74,11 @@ int conf_db_init(
 	uint8_t k[2] = { CONF_CODE_KEY0_ROOT, CONF_CODE_KEY1_VERSION };
 	namedb_val_t key = { k, sizeof(k) };
 
-	int ret = conf->api->count(txn);
+	int ret = namedb_count(conf->db_ctx, txn);
 	if (ret == 0) { // Initialize empty DB with DB version.
 		uint8_t d[1] = { CONF_DB_VERSION };
 		namedb_val_t data = { d, sizeof(d) };
-		return conf->api->insert(txn, &key, &data, 0);
+		return namedb_insert(conf->db_ctx, txn, &key, &data, 0);
 	} else if (ret > 0) { // Check existing DB.
 		return conf_db_check(conf, txn);
 	} else { // DB error.
@@ -108,7 +108,7 @@ int conf_db_code(
 
 	// Check if the item is already registered.
 	namedb_val_t data;
-	int ret = conf->api->find(txn, &key, &data, 0);
+	int ret = namedb_find(conf->db_ctx, txn, &key, &data, 0);
 	if (ret == KNOT_EOK) {
 		*db_code = ((uint8_t *)data.data)[0];
 		return KNOT_EOK;
@@ -122,13 +122,13 @@ int conf_db_code(
 	key.len = CONF_MIN_KEY_LEN;
 
 	// Find the smallest unused item code.
-	namedb_iter_t *it = conf->api->iter_begin(txn, NAMEDB_NOOP);
-	it = conf->api->iter_seek(it, &key, NAMEDB_GEQ);
+	namedb_iter_t *it = namedb_begin_iter(conf->db_ctx, txn, NAMEDB_NOOP);
+	it = namedb_seek_iter(conf->db_ctx, it, &key, NAMEDB_GEQ);
 	while (it != NULL) {
 		namedb_val_t iter_key;
-		ret = conf->api->iter_key(it, &iter_key);
+		ret = namedb_key_iter(conf->db_ctx, it, &iter_key);
 		if (ret != KNOT_EOK) {
-			conf->api->iter_finish(it);
+			namedb_finish_iter(conf->db_ctx, it);
 			return ret;
 		}
 		uint8_t *key_data = (uint8_t *)iter_key.data;
@@ -140,9 +140,9 @@ int conf_db_code(
 		}
 
 		namedb_val_t iter_val;
-		ret = conf->api->iter_val(it, &iter_val);
+		ret = namedb_val_iter(conf->db_ctx, it, &iter_val);
 		if (ret != KNOT_EOK) {
-			conf->api->iter_finish(it);
+			namedb_finish_iter(conf->db_ctx, it);
 			return ret;
 		}
 		uint8_t code = ((uint8_t *)iter_val.data)[0];
@@ -150,15 +150,15 @@ int conf_db_code(
 		// Check the current code if already used.
 		if (new_code <= code) {
 			if (code == CONF_CODE_KEY1_LAST) {
-				conf->api->iter_finish(it);
+				namedb_finish_iter(conf->db_ctx, it);
 				return KNOT_ERANGE;
 			}
 			new_code = code + 1;
 		}
 
-		it = conf->api->iter_next(it);
+		it = namedb_next_iter(conf->db_ctx, it);
 	}
-	conf->api->iter_finish(it);
+	namedb_finish_iter(conf->db_ctx, it);
 
 	// Restore the full key.
 	key.len = CONF_MIN_KEY_LEN + name[0];
@@ -168,7 +168,7 @@ int conf_db_code(
 	data.len = sizeof(new_code);
 
 	// Register new item code.
-	ret = conf->api->insert(txn, &key, &data, 0);
+	ret = namedb_insert(conf->db_ctx, txn, &key, &data, 0);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}
@@ -215,7 +215,7 @@ static int db_insert(
 			return KNOT_ERANGE;
 		}
 
-		int ret = conf->api->find(txn, key, &d, 0);
+		int ret = namedb_find(conf->db_ctx, txn, key, &d, 0);
 		if (ret == KNOT_ENOENT) {
 			d.len = 0;
 		} else if (ret == KNOT_EOK) {
@@ -253,7 +253,7 @@ static int db_insert(
 		d.len = new_len;
 
 		// Insert new (or append) data.
-		ret = conf->api->insert(txn, key, &d, 0);
+		ret = namedb_insert(conf->db_ctx, txn, key, &d, 0);
 
 		free(new_data);
 
@@ -264,7 +264,7 @@ static int db_insert(
 		}
 
 		// Insert new (overwrite old) data.
-		return conf->api->insert(txn, key, data, 0);
+		return namedb_insert(conf->db_ctx, txn, key, data, 0);
 	}
 }
 
@@ -304,7 +304,7 @@ int conf_db_set(
 		namedb_val_t val = { NULL };
 
 		// Check for already configured id.
-		ret = conf->api->find(txn, &key, &val, 0);
+		ret = namedb_find(conf->db_ctx, txn, &key, &val, 0);
 		if (ret == KNOT_EOK) {
 			return KNOT_CONF_EREDEFINE;
 		}
@@ -382,7 +382,7 @@ int conf_db_get(
 	}
 
 	// Read the data.
-	ret = conf->api->find(txn, &key, &val, 0);
+	ret = namedb_find(conf->db_ctx, txn, &key, &val, 0);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}
@@ -494,8 +494,8 @@ int conf_db_iter_begin(
 	namedb_val_t key = { k, sizeof(k) };
 
 	// Get the data.
-	iter->iter = conf->api->iter_begin(txn, NAMEDB_NOOP);
-	iter->iter = conf->api->iter_seek(iter->iter, &key, NAMEDB_GEQ);
+	iter->iter = namedb_begin_iter(conf->db_ctx, txn, NAMEDB_NOOP);
+	iter->iter = namedb_seek_iter(conf->db_ctx, iter->iter, &key, NAMEDB_GEQ);
 
 	return KNOT_EOK;
 }
@@ -513,16 +513,16 @@ int conf_db_iter_next(
 	}
 
 	// Move to the next key-value.
-	iter->iter = conf->api->iter_next(iter->iter);
+	iter->iter = namedb_next_iter(conf->db_ctx, iter->iter);
 	if (iter->iter == NULL) {
 		return KNOT_EOF;
 	}
 
 	// Get new key.
 	namedb_val_t key;
-	int ret = conf->api->iter_key(iter->iter, &key);
+	int ret = namedb_key_iter(conf->db_ctx, iter->iter, &key);
 	if (ret != KNOT_EOK) {
-		conf->api->iter_finish(iter->iter);
+		namedb_finish_iter(conf->db_ctx, iter->iter);
 		return ret;
 	}
 	uint8_t *key_data = (uint8_t *)key.data;
@@ -530,7 +530,7 @@ int conf_db_iter_next(
 	// Check for key overflow.
 	if (key_data[KEY0_POS] != iter->key0_code ||
 	    key_data[KEY1_POS] != CONF_CODE_KEY1_ID) {
-		conf->api->iter_finish(iter->iter);
+		namedb_finish_iter(conf->db_ctx, iter->iter);
 		iter->iter = NULL;
 		return KNOT_EOF;
 	}
@@ -546,7 +546,7 @@ void conf_db_iter_finish(
 		return;
 	}
 
-	conf->api->iter_finish(iter->iter);
+	namedb_finish_iter(conf->db_ctx, iter->iter);
 }
 
 int conf_db_iter_id(
@@ -560,7 +560,7 @@ int conf_db_iter_id(
 	}
 
 	namedb_val_t key;
-	int ret = conf->api->iter_key(iter->iter, &key);
+	int ret = namedb_key_iter(conf->db_ctx, iter->iter, &key);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}
@@ -590,16 +590,16 @@ int conf_db_raw_dump(
 	int ret = KNOT_EOK;
 
 	namedb_txn_t txn = conf->read_txn;
-	namedb_iter_t *it = conf->api->iter_begin(&txn, NAMEDB_FIRST);
+	namedb_iter_t *it = namedb_begin_iter(conf->db_ctx, &txn, NAMEDB_FIRST);
 	while (it != NULL) {
 		namedb_val_t key;
-		ret = conf->api->iter_key(it, &key);
+		ret = namedb_key_iter(conf->db_ctx, it, &key);
 		if (ret != KNOT_EOK) {
 			break;
 		}
 
 		namedb_val_t data;
-		ret = conf->api->iter_val(it, &data);
+		ret = namedb_val_iter(conf->db_ctx, it, &data);
 		if (ret != KNOT_EOK) {
 			break;
 		}
@@ -632,9 +632,9 @@ int conf_db_raw_dump(
 			fprintf(fp, ">\n");
 		}
 
-		it = conf->api->iter_next(it);
+		it = namedb_next_iter(conf->db_ctx, it);
 	}
-	conf->api->iter_finish(it);
+	namedb_finish_iter(conf->db_ctx, it);
 
 	if (file_name != NULL) {
 		fclose(fp);

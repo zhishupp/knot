@@ -45,14 +45,12 @@
 
 /*! Configuration context. */
 typedef struct {
-	/*! Currently used namedb api. */
-	const struct namedb_api *api;
+	/*! Configuration database. */
+	namedb_ctx_t *db_ctx;
 	/*! Configuration scheme. */
 	yp_item_t *scheme;
 	/*! Memory context. */
 	mm_ctx_t *mm;
-	/*! Configuration database. */
-	namedb_t *db;
 	/*! Read-only transaction for config access. */
 	namedb_txn_t read_txn;
 	/*! Prearranged hostname string (for automatic NSID or CH ident value). */

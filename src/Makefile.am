@@ -138,6 +138,7 @@ libknot_internal_la_SOURCES = 			\
 	libknot/internal/mem.c			\
 	libknot/internal/mempattern.c		\
 	libknot/internal/mempool.c		\
+	libknot/internal/namedb/namedb.c	\
 	libknot/internal/namedb/namedb_lmdb.c	\
 	libknot/internal/namedb/namedb_trie.c	\
 	libknot/internal/net.c			\

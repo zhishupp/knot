@@ -79,3 +79,32 @@ typedef struct namedb_api {
 	int (*iter_val)(namedb_iter_t *iter, namedb_val_t *val);
 	void (*iter_finish)(namedb_iter_t *iter);
 } namedb_api_t;
+
+
+typedef struct namedb_ctx {
+	const namedb_api_t *api;
+	namedb_t *db;
+} namedb_ctx_t;
+
+
+void namedb_deinit(namedb_ctx_t *ctx);
+int namedb_begin_txn(namedb_ctx_t *ctx, namedb_txn_t *txn, unsigned flags);
+int namedb_commit_txn(namedb_ctx_t *ctx, namedb_txn_t *txn);
+void namedb_abort_txn(namedb_ctx_t *ctx, namedb_txn_t *txn);
+
+int namedb_count(namedb_ctx_t *ctx, namedb_txn_t *txn);
+int namedb_clear(namedb_ctx_t *ctx, namedb_txn_t *txn);
+int namedb_find(namedb_ctx_t *ctx, namedb_txn_t *txn,
+                namedb_val_t *key, namedb_val_t *val, unsigned flags);
+int namedb_insert(namedb_ctx_t *ctx, namedb_txn_t *txn,
+                  namedb_val_t *key, namedb_val_t *val, unsigned flags);
+int namedb_del(namedb_ctx_t *ctx, namedb_txn_t *txn, namedb_val_t *key);
+
+namedb_iter_t *namedb_begin_iter(namedb_ctx_t *ctx, namedb_txn_t *txn,
+                                 unsigned flags);
+namedb_iter_t *namedb_seek_iter(namedb_ctx_t *ctx, namedb_iter_t *iter,
+                                namedb_val_t *key, unsigned flags);
+namedb_iter_t *namedb_next_iter(namedb_ctx_t *ctx, namedb_iter_t *iter);
+void namedb_finish_iter(namedb_ctx_t *ctx, namedb_iter_t *iter);
+int namedb_key_iter(namedb_ctx_t *ctx, namedb_iter_t *iter, namedb_val_t *key);
+int namedb_val_iter(namedb_ctx_t *ctx, namedb_iter_t *iter, namedb_val_t *val);

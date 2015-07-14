@@ -33,6 +33,11 @@
 #include "libknot/yparser/yptrafo.h"
 #include "libknot/internal/mempool.h"
 
+/*! Configuration specific logging. */
+#define CONF_LOG(severity, msg, ...) do { \
+	log_msg(severity, "config, " msg, ##__VA_ARGS__); \
+	} while (0)
+
 #define MAX_INCLUDE_DEPTH	5
 
 // The active configuration.
@@ -118,6 +123,12 @@ int conf_new(
 	lmdb_opts.mapsize = 500 * 1024 * 1024;
 	lmdb_opts.flags.env = NAMEDB_LMDB_NOTLS;
 
+	out->db_ctx = mm_alloc(out->mm, sizeof(namedb_ctx_t));
+	if (out->db_ctx == NULL) {
+		ret = KNOT_ENOMEM;
+		goto new_error;
+	}
+
 	// Open database.
 	if (db_dir == NULL) {
 		// A temporary solution until proper trie support is available.
@@ -128,15 +139,12 @@ int conf_new(
 			ret = KNOT_ENOMEM;
 			goto new_error;
 		}
-		out->api = namedb_lmdb_api();
-		ret = out->api->init(&out->db, out->mm, &lmdb_opts);
-
+		ret = namedb_init_lmdb(out->db_ctx, out->mm, &lmdb_opts);
 		// Remove opened database to ensure it is temporary.
 		rm_dir(tpl);
 	} else {
 		lmdb_opts.path = db_dir;
-		out->api = namedb_lmdb_api();
-		ret = out->api->init(&out->db, out->mm, &lmdb_opts);
+		ret = namedb_init_lmdb(out->db_ctx, out->mm, &lmdb_opts);
 	}
 
 	// Check database opening.
@@ -146,29 +154,29 @@ int conf_new(
 
 	// Initialize/check database.
 	namedb_txn_t txn;
-	ret = out->api->txn_begin(out->db, &txn, 0);
+	ret = namedb_begin_txn(out->db_ctx, &txn, 0);
 	if (ret != KNOT_EOK) {
-		out->api->deinit(out->db);
+		namedb_deinit(out->db_ctx);
 		goto new_error;
 	}
 
 	ret = conf_db_init(out, &txn);
 	if (ret != KNOT_EOK) {
-		out->api->txn_abort(&txn);
-		out->api->deinit(out->db);
+		namedb_abort_txn(out->db_ctx, &txn);
+		namedb_deinit(out->db_ctx);
 		goto new_error;
 	}
 
-	ret = out->api->txn_commit(&txn);
+	ret = namedb_commit_txn(out->db_ctx, &txn);
 	if (ret != KNOT_EOK) {
-		out->api->deinit(out->db);
+		namedb_deinit(out->db_ctx);
 		goto new_error;
 	}
 
 	// Open common read-only transaction.
-	ret = out->api->txn_begin(out->db, &out->read_txn, NAMEDB_RDONLY);
+	ret = namedb_begin_txn(out->db_ctx, &out->read_txn, NAMEDB_RDONLY);
 	if (ret != KNOT_EOK) {
-		out->api->deinit(out->db);
+		namedb_deinit(out->db_ctx);
 		goto new_error;
 	}
 
@@ -179,6 +187,7 @@ int conf_new(
 
 	return KNOT_EOK;
 new_error:
+	mm_free(out->mm, out->db_ctx);
 	yp_scheme_free(out->scheme);
 	mp_delete(out->mm->ctx);
 	free(out->mm);
@@ -208,13 +217,12 @@ int conf_clone(
 	}
 
 	// Set shared items.
-	out->api = s_conf->api;
 	out->mm = s_conf->mm;
-	out->db = s_conf->db;
+	out->db_ctx = s_conf->db_ctx;
 	out->filename = s_conf->filename;
 
 	// Open common read-only transaction.
-	ret = out->api->txn_begin(out->db, &out->read_txn, NAMEDB_RDONLY);
+	ret = namedb_begin_txn(out->db_ctx, &out->read_txn, NAMEDB_RDONLY);
 	if (ret != KNOT_EOK) {
 		yp_scheme_free(out->scheme);
 		free(out);
@@ -268,14 +276,15 @@ void conf_free(
 		return;
 	}
 
+	namedb_abort_txn(conf->db_ctx, &conf->read_txn);
 	yp_scheme_free(conf->scheme);
-	conf->api->txn_abort(&conf->read_txn);
 	free(conf->hostname);
 
 	conf_deactivate_modules(conf, &conf->query_modules, &conf->query_plan);
 
 	if (!is_clone) {
-		conf->api->deinit(conf->db);
+		namedb_deinit(conf->db_ctx);
+		mm_free(conf->mm, conf->db_ctx);
 		mp_delete(conf->mm->ctx);
 		free(conf->mm);
 		free(conf->filename);
@@ -656,22 +665,22 @@ int conf_import(
 	int ret;
 
 	namedb_txn_t txn;
-	ret = conf->api->txn_begin(conf->db, &txn, 0);
+	ret = namedb_begin_txn(conf->db_ctx, &txn, 0);
 	if (ret != KNOT_EOK) {
 		goto import_error;
 	}
 
 	// Drop the current DB content.
-	ret = conf->api->clear(&txn);
+	ret = namedb_clear(conf->db_ctx, &txn);
 	if (ret != KNOT_EOK) {
-		conf->api->txn_abort(&txn);
+		namedb_abort_txn(conf->db_ctx, &txn);
 		goto import_error;
 	}
 
 	// Initialize new DB.
 	ret = conf_db_init(conf, &txn);
 	if (ret != KNOT_EOK) {
-		conf->api->txn_abort(&txn);
+		namedb_abort_txn(conf->db_ctx, &txn);
 		goto import_error;
 	}
 
@@ -681,19 +690,19 @@ int conf_import(
 	// Parse and import given file.
 	ret = conf_parse(conf, &txn, input, is_file, &depth, &prev);
 	if (ret != KNOT_EOK) {
-		conf->api->txn_abort(&txn);
+		namedb_abort_txn(conf->db_ctx, &txn);
 		goto import_error;
 	}
 
 	// Commit new configuration.
-	ret = conf->api->txn_commit(&txn);
+	ret = namedb_commit_txn(conf->db_ctx, &txn);
 	if (ret != KNOT_EOK) {
 		goto import_error;
 	}
 
 	// Update read-only transaction.
-	conf->api->txn_abort(&conf->read_txn);
-	ret = conf->api->txn_begin(conf->db, &conf->read_txn, NAMEDB_RDONLY);
+	namedb_abort_txn(conf->db_ctx, &conf->read_txn);
+	ret = namedb_begin_txn(conf->db_ctx, &conf->read_txn, NAMEDB_RDONLY);
 	if (ret != KNOT_EOK) {
 		goto import_error;
 	}
