@@ -185,5 +185,8 @@ int namedb_init_trie(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_trie_opts *o
 {
 	ctx->api = namedb_trie_api();
 	ctx->db = NULL;
+	if (ctx->api == NULL) {
+		return KNOT_ENOTSUP;
+	}
 	return ctx->api->init(&ctx->db, mm, opts);
 }

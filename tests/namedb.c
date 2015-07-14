@@ -54,13 +54,6 @@ static char *str_key_rand(size_t len, mm_ctx_t *pool)
 
 static void namedb_test_set(unsigned nkeys, char **keys, namedb_ctx_t *db)
 {
-//	if (api == NULL) {
-//		skip("API not compiled in");
-//		return;
-//	}
-
-
-
 	/* Start WR transaction. */
 	namedb_txn_t txn;
 	int ret = namedb_begin_txn(db, &txn, 0);

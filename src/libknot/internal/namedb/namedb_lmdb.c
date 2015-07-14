@@ -474,5 +474,8 @@ int namedb_init_lmdb(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_lmdb_opts *o
 {
 	ctx->api = namedb_lmdb_api();
 	ctx->db = NULL;
+	if (ctx->api == NULL) {
+		return KNOT_ENOTSUP;
+	}
 	return ctx->api->init(&ctx->db, mm, opts);
 }
