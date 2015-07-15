@@ -24,6 +24,7 @@
 #include "libknot/internal/macros.h"
 #include "libknot/internal/namedb/namedb_lmdb.h"
 #include "libknot/internal/errcode.h"
+#include "libknot/internal/namedb/namedb_internal.h"
 
 #include <lmdb.h>
 
@@ -185,7 +186,7 @@ static int dbase_open(struct lmdb_env *env, struct namedb_lmdb_opts *opts)
 	return KNOT_EOK;
 }
 
-static int init(namedb_t **db_ptr, mm_ctx_t *mm, void *arg)
+static int init(namedb_db_t **db_ptr, mm_ctx_t *mm, void *arg)
 {
 	if (db_ptr == NULL || arg == NULL) {
 		return KNOT_EINVAL;
@@ -226,7 +227,7 @@ static int init(namedb_t **db_ptr, mm_ctx_t *mm, void *arg)
 	return KNOT_EOK;
 }
 
-static void deinit(namedb_t *db)
+static void deinit(namedb_db_t *db)
 {
 	if (db) {
 		struct lmdb_env *env = db;
@@ -236,7 +237,7 @@ static void deinit(namedb_t *db)
 	}
 }
 
-static int txn_begin(namedb_t *db, namedb_txn_t *txn, unsigned flags)
+static int txn_begin(namedb_db_t *db, namedb_txn_t *txn, unsigned flags)
 {
 	txn->db = db;
 	txn->txn = NULL;
@@ -470,7 +471,7 @@ const namedb_api_t *namedb_lmdb_api(void)
 	return &api;
 }
 
-int namedb_init_lmdb(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_lmdb_opts *opts)
+int namedb_init_lmdb(namedb_t *ctx, mm_ctx_t *mm, struct namedb_lmdb_opts *opts)
 {
 	ctx->api = namedb_lmdb_api();
 	ctx->db = NULL;

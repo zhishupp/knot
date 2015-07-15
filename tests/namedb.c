@@ -27,6 +27,7 @@
 #include "libknot/internal/mem.h"
 #include "libknot/internal/namedb/namedb_lmdb.h"
 #include "libknot/internal/namedb/namedb_trie.h"
+#include "libknot/internal/namedb/namedb_internal.h"
 #include "libknot/internal/strlcpy.h"
 #include "libknot/libknot.h"
 
@@ -52,7 +53,7 @@ static char *str_key_rand(size_t len, mm_ctx_t *pool)
 #define ASORT_LT(x, y) (strcmp((x), (y)) < 0)
 #include "libknot/internal/array-sort.h"
 
-static void namedb_test_set(unsigned nkeys, char **keys, namedb_ctx_t *db)
+static void namedb_test_set(unsigned nkeys, char **keys, namedb_t *db)
 {
 	/* Start WR transaction. */
 	namedb_txn_t txn;
@@ -224,7 +225,7 @@ int main(int argc, char *argv[])
 	struct namedb_trie_opts trie_opts = NAMEDB_TRIE_OPTS_INITIALIZER;
 
 	/* Create database LMDB*/
-	namedb_ctx_t db;
+	namedb_t db;
 	int ret = namedb_init_lmdb(&db, &pool, &lmdb_opts);
 	ok(ret == KNOT_EOK && db.api != NULL, "%s: create", db.api->name);
 	namedb_test_set(nkeys, keys, &db);

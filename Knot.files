@@ -361,6 +361,7 @@ src/libknot/internal/namedb/midl.c
 src/libknot/internal/namedb/midl.h
 src/libknot/internal/namedb/namedb.h
 src/libknot/internal/namedb/namedb.c
+src/libknot/internal/namedb/namedb_internal.h
 src/libknot/internal/namedb/namedb_lmdb.c
 src/libknot/internal/namedb/namedb_lmdb.h
 src/libknot/internal/namedb/namedb_trie.c

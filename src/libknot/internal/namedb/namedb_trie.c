@@ -21,8 +21,9 @@
 #include "libknot/internal/namedb/namedb_trie.h"
 #include "libknot/internal/trie/hat-trie.h"
 #include "libknot/internal/mempattern.h"
+#include "libknot/internal/namedb/namedb_internal.h"
 
-static int init(namedb_t **db, mm_ctx_t *mm, void *arg)
+static int init(namedb_db_t **db, mm_ctx_t *mm, void *arg)
 {
 	if (db == NULL || arg == NULL) {
 		return KNOT_EINVAL;
@@ -39,12 +40,12 @@ static int init(namedb_t **db, mm_ctx_t *mm, void *arg)
 	return KNOT_EOK;
 }
 
-static void deinit(namedb_t *db)
+static void deinit(namedb_db_t *db)
 {
 	hattrie_free((hattrie_t *)db);
 }
 
-static int txn_begin(namedb_t *db, namedb_txn_t *txn, unsigned flags)
+static int txn_begin(namedb_db_t *db, namedb_txn_t *txn, unsigned flags)
 {
 	txn->txn = (void *)(size_t)flags;
 	txn->db  = db;
@@ -181,7 +182,7 @@ const namedb_api_t *namedb_trie_api(void)
 	return &api;
 }
 
-int namedb_init_trie(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_trie_opts *opts)
+int namedb_init_trie(namedb_t *ctx, mm_ctx_t *mm, struct namedb_trie_opts *opts)
 {
 	ctx->api = namedb_trie_api();
 	ctx->db = NULL;

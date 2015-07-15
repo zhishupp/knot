@@ -44,5 +44,4 @@ struct namedb_lmdb_opts {
 	{ 0, 0 } \
 }
 
-const namedb_api_t *namedb_lmdb_api(void);
-int namedb_init_lmdb(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_lmdb_opts *opts);
+int namedb_init_lmdb(namedb_t *ctx, mm_ctx_t *mm, struct namedb_lmdb_opts *opts);

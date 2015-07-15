@@ -64,7 +64,7 @@ static void clear_timers(time_t *timers)
 }
 
 /*! \brief Stores timers for persistent events. */
-static int store_timers(namedb_ctx_t *timer_db, namedb_txn_t *txn, zone_t *zone)
+static int store_timers(namedb_t *timer_db, namedb_txn_t *txn, zone_t *zone)
 {
 	// Create key
 	namedb_val_t key = { .len = knot_dname_size(zone->name), .data = zone->name };
@@ -107,7 +107,7 @@ static int store_timers(namedb_ctx_t *timer_db, namedb_txn_t *txn, zone_t *zone)
 }
 
 /*! \brief Reads timers for persistent events. */
-static int read_timers(namedb_ctx_t *timer_db, namedb_txn_t *txn,
+static int read_timers(namedb_t *timer_db, namedb_txn_t *txn,
                        const zone_t *zone, time_t *timers)
 {
 	namedb_val_t key = { .len = knot_dname_size(zone->name), .data = zone->name };
@@ -141,7 +141,7 @@ static int read_timers(namedb_ctx_t *timer_db, namedb_txn_t *txn,
 
 /* -------- API ------------------------------------------------------------- */
 
-int open_timers_db(const char *storage, namedb_ctx_t **db_ptr)
+int open_timers_db(const char *storage, namedb_t **db_ptr)
 {
 	if (storage == NULL || db_ptr == NULL) {
 		return KNOT_EINVAL;
@@ -153,7 +153,7 @@ int open_timers_db(const char *storage, namedb_ctx_t **db_ptr)
 		return KNOT_ENOMEM;
 	}
 
-	*db_ptr = malloc(sizeof(namedb_ctx_t));
+	*db_ptr = malloc(sizeof(namedb_t));
 	if (*db_ptr == NULL) {
 		free((char *)opts.path);
 	}
@@ -168,7 +168,7 @@ int open_timers_db(const char *storage, namedb_ctx_t **db_ptr)
 	return ret;
 }
 
-void close_timers_db(namedb_ctx_t *timer_db)
+void close_timers_db(namedb_t *timer_db)
 {
 	if (timer_db == NULL) {
 		return;
@@ -178,7 +178,7 @@ void close_timers_db(namedb_ctx_t *timer_db)
 	free(timer_db);
 }
 
-int read_zone_timers(namedb_ctx_t *timer_db, const zone_t *zone, time_t *timers)
+int read_zone_timers(namedb_t *timer_db, const zone_t *zone, time_t *timers)
 {
 	if (timer_db == NULL) {
 		clear_timers(timers);
@@ -204,7 +204,9 @@ int read_zone_timers(namedb_ctx_t *timer_db, const zone_t *zone, time_t *timers)
 	return KNOT_EOK;
 }
 
+int write_zone_timers(namedb_ctx_t *timer_db, zone_t *zone)
 int write_timer_db(namedb_ctx_t *timer_db, knot_zonedb_t *zone_db)
+int write_zone_timers(namedb_t *timer_db, zone_t *zone)
 {
 	if (timer_db == NULL) {
 		return KNOT_EOK;
@@ -225,7 +227,7 @@ int write_timer_db(namedb_ctx_t *timer_db, knot_zonedb_t *zone_db)
 	return namedb_commit_txn(timer_db, &txn);
 }
 
-int sweep_timer_db(namedb_ctx_t *timer_db, knot_zonedb_t *zone_db)
+int sweep_timer_db(namedb_t *timer_db, knot_zonedb_t *zone_db)
 {
 	if (timer_db == NULL) {
 		return KNOT_EOK;

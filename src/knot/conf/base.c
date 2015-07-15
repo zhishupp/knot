@@ -123,7 +123,7 @@ int conf_new(
 	lmdb_opts.mapsize = 500 * 1024 * 1024;
 	lmdb_opts.flags.env = NAMEDB_LMDB_NOTLS;
 
-	out->db_ctx = mm_alloc(out->mm, sizeof(namedb_ctx_t));
+	out->db_ctx = mm_alloc(out->mm, sizeof(namedb_t));
 	if (out->db_ctx == NULL) {
 		ret = KNOT_ENOMEM;
 		goto new_error;

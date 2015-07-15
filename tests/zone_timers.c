@@ -36,11 +36,6 @@ int main(int argc, char *argv[])
 {
 	plan_lazy();
 
-	if (namedb_lmdb_api() == NULL) {
-		skip("LMDB API not compiled");
-		return EXIT_SUCCESS;
-	}
-
 	// Temporary DB identifier.
 	char dbid_buf[] = "/tmp/timerdb.XXXXXX";
 	const char *dbid = mkdtemp(dbid_buf);
@@ -63,8 +58,10 @@ int main(int argc, char *argv[])
 	ret = knot_zonedb_insert(zone_db, zone_2);
 	assert(ret == KNOT_EOK);
 
+	namedb_ctx_t *db = NULL;
 	knot_zonedb_build_index(zone_db);
 	namedb_ctx_t *db = NULL;
+	namedb_t *db = NULL;
 	ret = open_timers_db(dbid, &db);
 	ok(ret == KNOT_EOK && db != NULL, "zone timers: create");
 

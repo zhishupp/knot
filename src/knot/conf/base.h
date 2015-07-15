@@ -46,7 +46,7 @@
 /*! Configuration context. */
 typedef struct {
 	/*! Configuration database. */
-	namedb_ctx_t *db_ctx;
+	namedb_t *db_ctx;
 	/*! Configuration scheme. */
 	yp_item_t *scheme;
 	/*! Memory context. */

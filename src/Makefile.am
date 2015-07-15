@@ -74,6 +74,7 @@ nobase_libknot_internal_la_HEADERS = 		\
 	libknot/internal/mempattern.h		\
 	libknot/internal/mempool.h		\
 	libknot/internal/namedb/namedb.h	\
+	libknot/internal/namedb/namedb_internal.h	\
 	libknot/internal/namedb/namedb_lmdb.h	\
 	libknot/internal/namedb/namedb_trie.h	\
 	libknot/internal/net.h			\

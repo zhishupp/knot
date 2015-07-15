@@ -35,7 +35,7 @@ enum {
 	NAMEDB_GEQ    = 1 << 8  /*!< Greater or equal. */
 };
 
-typedef void namedb_t;
+typedef void namedb_db_t;
 typedef void namedb_iter_t;
 
 typedef struct namedb_val {
@@ -44,67 +44,38 @@ typedef struct namedb_val {
 } namedb_val_t;
 
 typedef struct namedb_txn {
-	namedb_t *db;
+	namedb_db_t *db;
 	void *txn;
 } namedb_txn_t;
 
-typedef struct namedb_api {
-	const char *name;
-
-	/* Context operations */
-
-	int (*init)(namedb_t **db, mm_ctx_t *mm, void *opts);
-	void (*deinit)(namedb_t *db);
-
-	/* Transactions */
-
-	int (*txn_begin)(namedb_t *db, namedb_txn_t *txn, unsigned flags);
-	int (*txn_commit)(namedb_txn_t *txn);
-	void (*txn_abort)(namedb_txn_t *txn);
-
-	/* Data access */
-
-	int (*count)(namedb_txn_t *txn);
-	int (*clear)(namedb_txn_t *txn);
-	int (*find)(namedb_txn_t *txn, namedb_val_t *key, namedb_val_t *val, unsigned flags);
-	int (*insert)(namedb_txn_t *txn, namedb_val_t *key, namedb_val_t *val, unsigned flags);
-	int (*del)(namedb_txn_t *txn, namedb_val_t *key);
-
-	/* Iteration */
-
-	namedb_iter_t *(*iter_begin)(namedb_txn_t *txn, unsigned flags);
-	namedb_iter_t *(*iter_seek)(namedb_iter_t *iter, namedb_val_t *key, unsigned flags);
-	namedb_iter_t *(*iter_next)(namedb_iter_t *iter);
-	int (*iter_key)(namedb_iter_t *iter, namedb_val_t *key);
-	int (*iter_val)(namedb_iter_t *iter, namedb_val_t *val);
-	void (*iter_finish)(namedb_iter_t *iter);
-} namedb_api_t;
+struct namedb_api;
+typedef struct namedb_api namedb_api_t;
 
 
-typedef struct namedb_ctx {
+typedef struct namedb {
 	const namedb_api_t *api;
-	namedb_t *db;
-} namedb_ctx_t;
+	namedb_db_t *db;
+} namedb_t;
 
 
-void namedb_deinit(namedb_ctx_t *ctx);
-int namedb_begin_txn(namedb_ctx_t *ctx, namedb_txn_t *txn, unsigned flags);
-int namedb_commit_txn(namedb_ctx_t *ctx, namedb_txn_t *txn);
-void namedb_abort_txn(namedb_ctx_t *ctx, namedb_txn_t *txn);
+void namedb_deinit(namedb_t *ctx);
+int namedb_begin_txn(namedb_t *ctx, namedb_txn_t *txn, unsigned flags);
+int namedb_commit_txn(namedb_t *ctx, namedb_txn_t *txn);
+void namedb_abort_txn(namedb_t *ctx, namedb_txn_t *txn);
 
-int namedb_count(namedb_ctx_t *ctx, namedb_txn_t *txn);
-int namedb_clear(namedb_ctx_t *ctx, namedb_txn_t *txn);
-int namedb_find(namedb_ctx_t *ctx, namedb_txn_t *txn,
+int namedb_count(namedb_t *ctx, namedb_txn_t *txn);
+int namedb_clear(namedb_t *ctx, namedb_txn_t *txn);
+int namedb_find(namedb_t *ctx, namedb_txn_t *txn,
                 namedb_val_t *key, namedb_val_t *val, unsigned flags);
-int namedb_insert(namedb_ctx_t *ctx, namedb_txn_t *txn,
+int namedb_insert(namedb_t *ctx, namedb_txn_t *txn,
                   namedb_val_t *key, namedb_val_t *val, unsigned flags);
-int namedb_del(namedb_ctx_t *ctx, namedb_txn_t *txn, namedb_val_t *key);
+int namedb_del(namedb_t *ctx, namedb_txn_t *txn, namedb_val_t *key);
 
-namedb_iter_t *namedb_begin_iter(namedb_ctx_t *ctx, namedb_txn_t *txn,
+namedb_iter_t *namedb_begin_iter(namedb_t *ctx, namedb_txn_t *txn,
                                  unsigned flags);
-namedb_iter_t *namedb_seek_iter(namedb_ctx_t *ctx, namedb_iter_t *iter,
+namedb_iter_t *namedb_seek_iter(namedb_t *ctx, namedb_iter_t *iter,
                                 namedb_val_t *key, unsigned flags);
-namedb_iter_t *namedb_next_iter(namedb_ctx_t *ctx, namedb_iter_t *iter);
-void namedb_finish_iter(namedb_ctx_t *ctx, namedb_iter_t *iter);
-int namedb_key_iter(namedb_ctx_t *ctx, namedb_iter_t *iter, namedb_val_t *key);
-int namedb_val_iter(namedb_ctx_t *ctx, namedb_iter_t *iter, namedb_val_t *val);
+namedb_iter_t *namedb_next_iter(namedb_t *ctx, namedb_iter_t *iter);
+void namedb_finish_iter(namedb_t *ctx, namedb_iter_t *iter);
+int namedb_key_iter(namedb_t *ctx, namedb_iter_t *iter, namedb_val_t *key);
+int namedb_val_iter(namedb_t *ctx, namedb_iter_t *iter, namedb_val_t *val);

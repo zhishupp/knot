@@ -31,5 +31,4 @@ struct namedb_trie_opts {
 	NAMEDB_TRIE_BUCKET_SIZE \
 }
 
-const namedb_api_t *namedb_trie_api(void);
-int namedb_init_trie(namedb_ctx_t *ctx, mm_ctx_t *mm, struct namedb_trie_opts *opts);
+int namedb_init_trie(namedb_t *ctx, mm_ctx_t *mm, struct namedb_trie_opts *opts);
