@@ -60,9 +60,8 @@ int read_zone_timers(namedb_t *timer_db, const zone_t *zone, time_t *timers);
  *
  * \return KNOT_E*
  */
-int write_zone_timers(namedb_ctx_t *timer_db, zone_t *zone);
-int write_timer_db(namedb_ctx_t *timer_db, knot_zonedb_t *zone_db);
-int write_zone_timers(namedb_t *timer_db, zone_t *zone);
+int write_timer_db(namedb_t *timer_db, knot_zonedb_t *zone_db);
+
 
 /*!
  * \brief Removes stale zones info from timers db.

@@ -64,7 +64,7 @@ static void clear_timers(time_t *timers)
 }
 
 /*! \brief Stores timers for persistent events. */
-static int store_timers(namedb_t *timer_db, namedb_txn_t *txn, zone_t *zone)
+static int store_timers(zone_t *zone, namedb_t *timer_db, namedb_txn_t *txn)
 {
 	// Create key
 	namedb_val_t key = { .len = knot_dname_size(zone->name), .data = zone->name };
@@ -204,9 +204,7 @@ int read_zone_timers(namedb_t *timer_db, const zone_t *zone, time_t *timers)
 	return KNOT_EOK;
 }
 
-int write_zone_timers(namedb_ctx_t *timer_db, zone_t *zone)
-int write_timer_db(namedb_ctx_t *timer_db, knot_zonedb_t *zone_db)
-int write_zone_timers(namedb_t *timer_db, zone_t *zone)
+int write_timer_db(namedb_t *timer_db, knot_zonedb_t *zone_db)
 {
 	if (timer_db == NULL) {
 		return KNOT_EOK;
@@ -222,7 +220,7 @@ int write_zone_timers(namedb_t *timer_db, zone_t *zone)
 		return ret;
 	}
 
-	knot_zonedb_foreach(zone_db, store_timers, &txn);
+	knot_zonedb_foreach(zone_db, store_timers, timer_db, &txn);
 
 	return namedb_commit_txn(timer_db, &txn);
 }
