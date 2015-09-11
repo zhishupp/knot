@@ -51,12 +51,10 @@ typedef struct namedb_txn {
 struct namedb_api;
 typedef struct namedb_api namedb_api_t;
 
-
 typedef struct namedb {
 	const namedb_api_t *api;
 	namedb_db_t *db;
 } namedb_t;
-
 
 void namedb_deinit(namedb_t *ctx);
 int namedb_begin_txn(namedb_t *ctx, namedb_txn_t *txn, unsigned flags);
