@@ -1,0 +1,71 @@
+fedora:
+  tags: [fedora, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+centos6:
+  tags: [centos6, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+centos7:
+  tags: [centos7, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+debian:
+  tags: [debian, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+debian-32:
+  tags: [debian, 32bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+opensuse:
+  tags: [opensuse, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+freebsd:
+  tags: [freebsd, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+freebsd-32:
+  tags: [freebsd, 32bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
+
+netbsd:
+  tags: [netbsd, 64bit]
+  script:
+    - ./autogen.sh
+    - ./configure
+    - make all
+    - make check
