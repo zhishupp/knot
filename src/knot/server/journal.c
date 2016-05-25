@@ -51,6 +51,7 @@ const char *JOURNAL_VERSION = "1.0";
 	knot_db_val_t key = { &(serial ## _be), sizeof(serial) }
 
 #define set_key(serial, new_serial) \
+	serial = new_serial, \
 	serial ## _be = htobe32(new_serial)
 
 #define get_key(data) \
@@ -407,7 +408,7 @@ static int load_changeset(knot_db_val_t *val, const knot_dname_t *zone_name,
 	return KNOT_EOK;
 }
 
-static int journal_drop(journal_t *j)
+static int drop_journal(journal_t *j)
 {
 	if (j == NULL) {
 		return KNOT_EINVAL;
@@ -493,21 +494,225 @@ static int journal_drop(journal_t *j)
 	return KNOT_EOK;
 }
 
+typedef struct {
+	journal_t *j;
+	knot_db_val_t *val;
+	knot_db_iter_t *iter;
+	uint32_t soa_to;
+	list_t *list;
+} iteration_ctx_t;
+
+static int refresh_txn_iter(journal_t *j, knot_db_txn_t *txn,
+                            knot_db_iter_t **iter, knot_db_val_t *key)
+{
+	j->db_api->iter_finish(*iter);
+	int ret = j->db_api->txn_commit(txn);
+	if (ret != KNOT_EOK) {
+		j->db_api->txn_abort(txn);
+		return ret;
+	}
+
+	ret = j->db_api->txn_begin(j->db, txn, 0);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+
+	knot_db_iter_t *it = j->db_api->iter_begin(txn, KNOT_DB_NOOP);
+	if (it == NULL) {
+		return KNOT_ERROR;
+	}
+
+	it = j->db_api->iter_seek(it, key, 0);
+	if (it == NULL) {
+		return KNOT_ENOENT;
+	}
+
+	*iter = it;
+	return KNOT_EOK;
+}
+
+static int get_iter_next(journal_t *j, knot_db_iter_t *iter, knot_db_val_t *key)
+{
+	int ret = KNOT_EOK;
+	knot_db_val_t other_key;
+
+	/* Move to the next item */
+	iter = j->db_api->iter_next(iter);
+	if (iter == NULL) {
+		/* Maybe we hit the end, try finding the next one normally */
+		iter = j->db_api->iter_seek(iter, key, 0);
+		if (iter == NULL) {
+			return KNOT_ENOENT;
+		}
+		return KNOT_EOK;
+	}
+
+	/* Get the next item's key */
+	ret = j->db_api->iter_key(iter, &other_key);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+
+	/* If the next item's key is not what we're looking for... */
+	if (get_key(key->data) != get_key(other_key.data)) {
+		/* ... look it up normally */
+		iter = j->db_api->iter_seek(iter, key, 0);
+		if (iter == NULL) {
+			return KNOT_ENOENT;
+		}
+	}
+
+	return KNOT_EOK;
+}
+
+typedef int (*iteration_cb_t)(iteration_ctx_t *ctx);
+
+static int iterate(journal_t *j, iteration_cb_t cb, iteration_ctx_t *ctx, uint32_t first, uint32_t last)
+{
+	knot_db_txn_t txn;
+	/* Begin transaction */
+	int ret = j->db_api->txn_begin(j->db, &txn, 0);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+
+	/* Begin iterator */
+	knot_db_iter_t *iter = j->db_api->iter_begin(&txn, KNOT_DB_NOOP);
+	if (iter == NULL) {
+		ret = KNOT_ERROR;
+		goto abort;
+	}
+
+	/* Reserve space for the journal key. */
+	uint32_t cur_serial = first;
+	make_key(cur_serial, key);
+
+	/* Move iterator to starting position */
+	iter = j->db_api->iter_seek(iter, &key, 0);
+	if (iter == NULL) {
+		ret = KNOT_ENOENT;
+		goto abort;
+	}
+
+	uint32_t soa_to = 0;
+	knot_db_val_t val;
+	/* Iterate through the DB */
+	while (true) {
+		ret = j->db_api->iter_val(iter, &val);
+		if (ret != KNOT_EOK) {
+			goto abort;
+		}
+
+		/* Get the next SOA serial */
+		ret = deserialize_soa_to(val.data, val.len, &soa_to);
+		assert(ret == KNOT_EOK);
+
+		/* Do something with the current item */
+		ctx->val = &val;
+		ctx->iter = iter;
+		ctx->soa_to = soa_to;
+		ret = cb(ctx);
+		if (ret == KNOT_ELIMIT) {
+			ret = refresh_txn_iter(j, &txn, &iter, &key);
+			if (ret != KNOT_EOK) {
+				goto abort;
+			}
+			ctx->iter = iter;
+			ret = cb(ctx);
+		}
+		if (ret != KNOT_EOK) {
+			goto abort;
+		}
+
+		/* Check if we just processed the last item */
+		if (cur_serial == last) {
+			break;
+		}
+
+		/* Set current serial and move to the next item */
+		set_key(cur_serial, soa_to);
+		ret = get_iter_next(j, iter, &key);
+		if (ret != KNOT_EOK) {
+			goto abort;
+		}
+	}
+
+	/* Commit */
+	j->db_api->iter_finish(iter);
+	ret = j->db_api->txn_commit(&txn);
+	if (ret != KNOT_EOK) {
+		j->db_api->txn_abort(&txn);
+	}
+
+	return KNOT_EOK;
+
+abort:
+	j->db_api->iter_finish(iter);
+	j->db_api->txn_abort(&txn);
+
+	return ret;
+}
+
+static int iteration_cb_load(iteration_ctx_t *ctx)
+{
+	changeset_t *ch = NULL;
+	int ret = load_changeset(ctx->val, ctx->j->zone_name, &ch);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+
+	/* Insert into changeset list. */
+	add_tail(ctx->list, &ch->n);
+
+	return KNOT_EOK;
+}
+
+static int iteration_cb_iter_del(iteration_ctx_t *ctx)
+{
+	int ret = knot_db_lmdb_iter_del(ctx->iter);
+	if (ret == KNOT_EOK) {
+		ctx->j->metadata.first_serial = ctx->soa_to;
+	}
+
+	return ret;
+}
+
+/*!
+ * \brief Remove all changesets between the first one and the 'last'.
+ * Assume 'last' is in the DB.
+ */
+static int remove_up_to(journal_t *j, uint32_t last)
+{
+	assert(j);
+
+	if (!(j->metadata.flags & LAST_FLUSHED_VALID)) {
+		return KNOT_EBUSY;
+	}
+
+	if (j->metadata.last_serial == last) {
+		return drop_journal(j);
+	}
+
+	iteration_ctx_t ctx = { .j = j };
+	return iterate(j, iteration_cb_iter_del, &ctx, j->metadata.first_serial, last);
+}
+
 static int store_changeset(changeset_t *ch, journal_t *j)
 {
 	assert(ch);
 	assert(j);
 
 	int ret = 0;
-	uint32_t k = knot_soa_serial(&ch->soa_from->rrs);
+	uint32_t serial_from = knot_soa_serial(&ch->soa_from->rrs);
+	uint32_t serial_to = knot_soa_serial(&ch->soa_to->rrs);
 
 	/* Let's check if we're continuing with the current
 	 * sequence of changes (serials). */
 	if ((j->metadata.flags & SERIAL_TO_VALID) != 0
-	    && k != j->metadata.last_serial_to) {
+	    && serial_from != j->metadata.last_serial_to) {
 		/* New sequence, discard all old changesets. */
 		if (j->metadata.last_flushed == j->metadata.last_serial) {
-			ret = journal_drop(j);
+			ret = drop_journal(j);
 			if (ret != KNOT_EOK) {
 				return ret;
 			}
@@ -518,7 +723,7 @@ static int store_changeset(changeset_t *ch, journal_t *j)
 		}
 	}
 
-	make_key(k, key);
+	make_key(serial_from, key);
 	knot_db_val_t val;
 	ret = prepare_val_from_changeset(&val, ch, j);
 	if (ret != KNOT_EOK) {
@@ -530,6 +735,35 @@ static int store_changeset(changeset_t *ch, journal_t *j)
 	ret = j->db_api->txn_begin(j->db, &txn, 0);
 	if (ret != KNOT_EOK) {
 		goto end;
+	}
+
+	/* Check for a serial collision (sub-cycle). */
+	make_key(serial_to, key_to);
+	knot_db_val_t val_to;
+	ret = j->db_api->find(&txn, &key_to, &val_to, 0);
+	if (ret != KNOT_ENOENT) {
+		j->db_api->txn_abort(&txn);
+		if (ret != KNOT_EOK) {
+			goto end;
+		}
+
+		/* Have the DB flushed before we start removing changesets. */
+		if (!(j->metadata.flags & LAST_FLUSHED_VALID) ||
+		    j->metadata.last_flushed != j->metadata.last_serial) {
+			ret = KNOT_EBUSY;
+			goto end;
+		}
+
+		/* Remove all past changesets leading to the collision. */
+		ret = remove_up_to(j, serial_to);
+		if (ret != KNOT_EOK) {
+			goto end;
+		}
+
+		ret = j->db_api->txn_begin(j->db, &txn, 0);
+		if (ret != KNOT_EOK) {
+			goto end;
+		}
 	}
 
 	journal_store_ctx_t ctx = {
@@ -546,9 +780,9 @@ static int store_changeset(changeset_t *ch, journal_t *j)
 		/* \todo: performance? I wanted a flag, but it seemed too complicated
 		 * to implement. */
 		if (j->db_api->count(&txn) == 1) {
-			ctx.metadata.first_serial = k; /* Inserted the first changeset. */
+			ctx.metadata.first_serial = serial_from; /* Inserted the first changeset. */
 		}
-		ctx.metadata.last_serial    = k;
+		ctx.metadata.last_serial    = serial_from;
 		ctx.metadata.last_serial_to = knot_soa_serial(&ch->soa_to->rrs);
 		ctx.metadata.flags         |= SERIAL_TO_VALID;
 		ret = store_ctx_commit(&ctx);
@@ -726,81 +960,13 @@ int journal_load_changesets(journal_t *j, list_t *dst, uint32_t from)
 		return KNOT_EINVAL;
 	}
 
-	knot_db_txn_t txn;
-	int ret = j->db_api->txn_begin(j->db, &txn, KNOT_DB_RDONLY);
-	if (ret != KNOT_EOK) {
-		return ret;
-	}
-
-	/* Reserve space for the journal key. */
-	make_key(from, key);
-	knot_db_val_t val;
-
-	knot_db_iter_t *iter = j->db_api->iter_begin(&txn, KNOT_DB_NOOP);
-	if (iter == NULL) {
-		ret = KNOT_ERROR;
-		goto abort;
-	}
-
-	iter = j->db_api->iter_seek(iter, &key, 0);
-	if (iter == NULL) {
-		ret = KNOT_ENOENT;
-		goto abort;
-	}
-
-	ret = j->db_api->iter_val(iter, &val);
-	if (ret != KNOT_EOK) {
-		goto abort;
-	}
-
-	uint32_t soa_to = 0;
-	changeset_t *ch = NULL;
-	while (ret == KNOT_EOK) {
-		ret = deserialize_soa_to(val.data, val.len, &soa_to);
-		assert(ret == KNOT_EOK);
-
-		ret = load_changeset(&val, j->zone_name, &ch);
-		if (ret != KNOT_EOK) {
-			goto abort;
-		}
-
-		/* Insert into changeset list. */
-		add_tail(dst, &ch->n);
-		set_key(from, soa_to);
-
-		iter = j->db_api->iter_next(iter);
-		if (iter == NULL) {
-			ret = KNOT_ENOENT;
-			break;
-		}
-
-		ret = j->db_api->iter_key(iter, &val);
-		if (ret != KNOT_EOK) {
-			break;
-		}
-
-		if (soa_to != get_key(val.data)) {
-			ret = j->db_api->find(&txn, &key, &val, 0);
-			if (ret != KNOT_EOK) {
-				break;
-			}
-		} else {
-			ret = j->db_api->iter_val(iter, &val);
-			if (ret != KNOT_EOK) {
-				break;
-			}
-		}
-	}
+	iteration_ctx_t ctx = { .j = j, .list = dst };
+	int ret = iterate(j, iteration_cb_load, &ctx, from, j->metadata.last_serial);
 
 	/* It's okay, we just found none of the next key. */
 	if (!EMPTY_LIST(*dst) && ret == KNOT_ENOENT) {
 		ret = KNOT_EOK;
 	}
-
-abort:
-	j->db_api->iter_finish(iter);
-	/* We can just abort read-only transactions. */
-	j->db_api->txn_abort(&txn);
 
 	return ret;
 }

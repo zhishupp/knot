@@ -26,7 +26,7 @@
 
 #include "libknot/libknot.h"
 #define JOURNAL_TEST_ENV
-#include "knot/server/journal.h"
+#include "knot/server/journal.c"
 #include "knot/zone/zone.h"
 #include "knot/zone/zone-diff.h"
 #include "libknot/rrtype/soa.h"
@@ -270,7 +270,7 @@ static void test_store_load(journal_t *j, char *jfilename)
 	ret = journal_flush(j);
 	ok(ret == KNOT_EOK, "journal: second flush");
 
-	/* Test whether the journal really flushed. */
+	/* Test whether the journal kept changesets after flush. */
 	ret = journal_load_changesets(j, &l, 1);
 	ok(ret == KNOT_EOK && changesets_list_eq(&l, &k), "journal: load right after flush");
 
@@ -323,6 +323,43 @@ static void test_store_load(journal_t *j, char *jfilename)
 	changesets_free(&l);
 	init_list(&l);
 	assert(journal_flush(j) == KNOT_EOK);
+	assert(drop_journal(j) == KNOT_EOK); /* Clear the journal for the collision test */
+
+	/* Test for serial number collision handling. We insert changesets
+	 * with valid serial sequence that overflows and then collides with itself.
+	 * The sequence is 0 -> 1 -> 2 -> 2147483647 -> 4294967294 -> 1 which should
+	 * remove changesets 0->1 and 1->2. */
+	m_ch = changeset_new(apex);
+	init_random_changeset(m_ch, 0, 1, 128, apex);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EOK);
+	changeset_set_soa_serials(m_ch, 1, 2, apex);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EOK);
+	changeset_set_soa_serials(m_ch, 2, 2147483647, apex);
+	add_tail(&k, &m_ch->n);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EOK);
+	m_ch = changeset_new(apex);
+	init_random_changeset(m_ch, 2147483647, 4294967294, 128, apex);
+	add_tail(&k, &m_ch->n);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EOK);
+	m_ch = changeset_new(apex);
+	init_random_changeset(m_ch, 4294967294, 1, 128, apex);
+	add_tail(&k, &m_ch->n);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EBUSY);
+	assert(journal_flush(j) == KNOT_EOK);
+	assert(journal_store_changeset(j, m_ch) == KNOT_EOK);
+	assert(journal_flush(j) == KNOT_EOK);
+	ret = journal_load_changesets(j, &l, 0);
+	int ret2 = journal_load_changesets(j, &l, 1);
+	int ret3 = journal_load_changesets(j, &l, 2);
+	ok(ret == KNOT_ENOENT && ret2 == KNOT_ENOENT && ret3 == KNOT_EOK &&
+	   changesets_list_eq(&l, &k), "journal: serial collision");
+
+	/* Cleanup. */
+	changesets_free(&l);
+	changesets_free(&k);
+	init_list(&l);
+	init_list(&k);
+
 	journal_close(j);
 }
 
