@@ -138,6 +138,9 @@ PKG_CHECK_MODULES([gnutls], [gnutls >= 3.0 nettle], [
     LIBS=$save_LIBS
 ])
 
+# OpenSSL for SHA-1
+PKG_CHECK_MODULES([openssl], [libcrypto])
+
 # JSON for DNSSEC status storage
 PKG_CHECK_MODULES([jansson], [jansson >= 2.3])
 
@@ -571,6 +574,7 @@ AC_MSG_RESULT([
     LIBS:     ${LIBS} ${LDFLAGS}
     LibURCU:  ${liburcu_LIBS} ${liburcu_CFLAGS}
     GnuTLS:   ${gnutls_LIBS} ${gnutls_CFLAGS}
+    OpenSSL:  ${openssl_LIBS} ${openssl_CFLAGS}
     Jansson:  ${jansson_LIBS} ${jansson_CFLAGS}
     Libedit:  ${libedit_LIBS} ${libedit_CFLAGS}
     LMDB:     ${enable_lmdb} ${lmdb_LIBS} ${lmdb_CFLAGS}
