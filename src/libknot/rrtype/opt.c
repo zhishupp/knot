@@ -455,3 +455,55 @@ int knot_edns_client_subnet_parse(const uint8_t *data,
 
 	return KNOT_EOK;
 }
+
+/*----------------------------------------------------------------------------*/
+_public_
+int knot_edns_timeout_create(const uint16_t timeout,
+			     uint8_t *data,
+			     uint16_t *data_len)
+{
+	if (data == NULL || data_len == NULL) {
+		return KNOT_EINVAL;
+	}
+
+	wire_ctx_t wire = wire_ctx_init(data, *data_len);
+	if (timeout == 0) {
+		wire_ctx_write_u16(&wire, 0);
+	} else {
+		wire_ctx_write_u16(&wire, 2);
+	}
+	wire_ctx_write_u16(&wire, timeout);
+
+	if (wire.error != KNOT_EOK) {
+		return wire.error;
+	}
+
+	*data_len = wire_ctx_offset(&wire);
+
+	return KNOT_EOK;
+}
+
+_public_
+int knot_edns_timeout_parse(const uint8_t *data,
+			    const uint16_t data_len,
+			    uint16_t *timeout)
+{
+	uint16_t option_length = 0;
+	if (data == NULL) {
+		return KNOT_EINVAL;
+	}
+
+	wire_ctx_t wire = wire_ctx_init_const(data, data_len);
+
+	option_length = wire_ctx_read_u16(&wire);
+	if (option_length == 0) {
+		*timeout = 0;
+	} else {
+		*timeout = wire_ctx_read_u16(&wire);
+	}
+	if (wire.error != KNOT_EOK) {
+		return wire.error;
+	}
+
+	return KNOT_EOK;
+}

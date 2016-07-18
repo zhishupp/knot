@@ -366,4 +366,34 @@ int knot_edns_client_subnet_parse(const uint8_t *data,
                                   uint16_t *addr_len,
                                   uint8_t *src_mask,
                                   uint8_t *dst_mask);
+
+/*!
+ * \brief Creates TCP Keepalive wire data.
+ *
+ * \param timeout  TCP Keepalive Timeout
+ * \param data     Output data buffer.
+ * \param data_len Size of output data buffer/written data.
+ *
+ * \return KNOT_EOK
+ * \return KNOT_EINVAL
+ * \return KNOT_ESPACE
+ */
+int knot_edns_timeout_create(const uint16_t timeout,
+			     uint8_t *data,
+			     uint16_t *data_len);
+
+/*!
+ * \brief Parses TCP Keepalive wire data.
+ *
+ * \param data     Input data buffer.
+ * \param data_len Length of input data buffer.
+ * \param timeout  TCP Keepalive Timeout
+ *
+ * \return KNOT_EOK
+ * \return KNOT_EINVAL
+ * \return KNOT_ESPACE
+ */
+int knot_edns_timeout_parse(const uint8_t *data,
+			    const uint16_t data_len,
+			    uint16_t *timeout);
 /*! @} */
