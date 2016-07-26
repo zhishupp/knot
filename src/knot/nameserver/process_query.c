@@ -393,10 +393,9 @@ static int set_rcode_to_packet(knot_pkt_t *pkt, struct query_data *qdata)
 	return ret;
 }
 
-static int process_query_err(knot_layer_t *ctx, knot_pkt_t *pkt)
+int process_query_error(knot_pkt_t *pkt, struct query_data *qdata)
 {
-	assert(pkt && ctx);
-	struct query_data *qdata = QUERY_DATA(ctx);
+	assert(pkt && qdata);
 
 	/* Initialize response from query packet. */
 	knot_pkt_t *query = qdata->query;
@@ -422,6 +421,13 @@ static int process_query_err(knot_layer_t *ctx, knot_pkt_t *pkt)
 	(void) process_query_sign_response(pkt, qdata);
 
 	return KNOT_STATE_DONE;
+}
+
+static int process_query_err(knot_layer_t *ctx, knot_pkt_t *pkt)
+{
+	struct query_data *qdata = QUERY_DATA(ctx);
+
+	return process_query_error(pkt, qdata);
 }
 
 /*!
@@ -527,7 +533,6 @@ static int process_query_out(knot_layer_t *ctx, knot_pkt_t *pkt)
 	/*
 	 * Postprocessing.
 	 */
-
 	if (next_state == KNOT_STATE_DONE || next_state == KNOT_STATE_PRODUCE) {
 
 		/* Restore original QNAME. */
@@ -564,16 +569,16 @@ finish:
 	}
 	/* In case of NS_PROC_FAIL, RCODE is set in the error-processing function. */
 
-	/* Rate limits (if applicable). */
-	if (qdata->param->proc_flags & NS_QUERY_LIMIT_RATE) {
-		next_state = ratelimit_apply(next_state, pkt, ctx);
-	}
-
 	/* After query processing code. */
 	if (plan) {
 		WALK_LIST(step, plan->stage[QPLAN_END]) {
 			next_state = step->process(next_state, pkt, qdata, step->ctx);
 		}
+	}
+
+	/* Rate limits (if applicable). */
+	if (qdata->param->proc_flags & NS_QUERY_LIMIT_RATE) {
+		next_state = ratelimit_apply(next_state, pkt, ctx);
 	}
 
 	rcu_read_unlock();
