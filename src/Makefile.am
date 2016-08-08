@@ -282,6 +282,8 @@ libknotd_la_SOURCES =				\
 	knot/modules/online_sign/module.h	\
 	knot/modules/online_sign/nsec_next.c	\
 	knot/modules/online_sign/nsec_next.h	\
+	knot/modules/stats.c			\
+	knot/modules/stats.h			\
 	knot/modules/synth_record.c		\
 	knot/modules/synth_record.h		\
 	knot/modules/whoami.c			\
@@ -325,6 +327,8 @@ libknotd_la_SOURCES =				\
 	knot/common/process.h			\
 	knot/common/ref.c			\
 	knot/common/ref.h			\
+	knot/common/stats.c			\
+	knot/common/stats.h			\
 	knot/server/dthreads.c			\
 	knot/server/dthreads.h			\
 	knot/server/journal.c			\
