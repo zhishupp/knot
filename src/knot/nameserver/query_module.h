@@ -1,4 +1,4 @@
-/*  Copyright (C) 2015 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -86,6 +86,20 @@ typedef struct static_module {
 	bool opt_conf;
 } static_module_t;
 
+typedef char* (*mod_idx_to_str_f)(uint32_t idx, uint32_t count);
+
+typedef struct {
+	const char *name;
+	union {
+		uint64_t counter;
+		struct {
+			uint64_t *counters;
+			mod_idx_to_str_f idx_to_str;
+		};
+	};
+	uint32_t count;
+} mod_ctr_t;
+
 /*!
  * Query module is a dynamically loadable unit that can alter query processing plan.
  * Module requires load and unload callback handlers and is provided with a context
@@ -99,8 +113,36 @@ struct query_module {
 	conf_mod_id_t *id;
 	qmodule_load_t load;
 	qmodule_unload_t unload;
+	mod_ctr_t *stats;
+	uint32_t stats_count;
 	unsigned scope;
 };
+
+int mod_stats_add(struct query_module *module, const char *name, uint32_t count,
+                  mod_idx_to_str_f idx);
+
+void mod_stats_free(struct query_module *module);
+
+inline static void mod_ctr_incr(mod_ctr_t *stats, uint32_t idx, uint64_t val)
+{
+	mod_ctr_t *ctr = stats + idx;
+	assert(ctr->count == 1);
+
+	__sync_fetch_and_add(&ctr->counter, val);
+}
+
+inline static void mod_ctrs_incr(mod_ctr_t *stats, uint32_t idx, uint32_t offset, uint64_t val)
+{
+	mod_ctr_t *ctr = stats + idx;
+	assert(ctr->count > 1);
+
+	// Increment the last counter if offset overflow.
+	if (offset < ctr->count) {
+		__sync_fetch_and_add(&ctr->counters[offset], val);
+	} else {
+		__sync_fetch_and_add(&ctr->counters[ctr->count - 1], val);
+	}
+}
 
 /*! \brief Single processing step in query processing. */
 struct query_step {
