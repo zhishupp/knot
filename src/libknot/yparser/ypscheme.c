@@ -1,4 +1,4 @@
-/*  Copyright (C) 2015 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -133,6 +133,32 @@ static void unset_item(
 	memset(item, 0, sizeof(yp_item_t));
 }
 
+static int scheme_count(
+	const yp_item_t *src)
+{
+	size_t count = 0;
+	for (const yp_item_t *item = src; item->name != NULL; item++) {
+		count++;
+	}
+
+	return count;
+}
+
+static int scheme_copy(
+	yp_item_t *dst,
+	const yp_item_t *src)
+{
+	// Copy the scheme.
+	for (int i = 0; src[i].name != NULL; i++) {
+		int ret = set_item(dst + i, src + i, dst);
+		if (ret != KNOT_EOK) {
+			return ret;
+		}
+	}
+
+	return KNOT_EOK;
+}
+
 int yp_scheme_copy(
 	yp_item_t **dst,
 	const yp_item_t *src)
@@ -141,14 +167,8 @@ int yp_scheme_copy(
 		return KNOT_EINVAL;
 	}
 
-	// Count scheme items.
-	size_t scheme_items = 0;
-	for (const yp_item_t *item = src; item->name != NULL; item++) {
-		scheme_items++;
-	}
-
-	// Allocate space for new scheme.
-	size_t size = (scheme_items + 1) * sizeof(yp_item_t);
+	// Allocate space for new scheme (+ terminal NULL item).
+	size_t size = (scheme_count(src) + 1) * sizeof(yp_item_t);
 	*dst = malloc(size);
 	if (*dst == NULL) {
 		return KNOT_ENOMEM;
@@ -156,21 +176,107 @@ int yp_scheme_copy(
 	memset(*dst, 0, size);
 
 	// Copy the scheme.
-	for (int i = 0; i < scheme_items; i++) {
-		if (src[i].name == NULL) {
-			break;
-		}
-
-		int ret = set_item(*dst + i, src + i, *dst);
-		if (ret != KNOT_EOK) {
-			yp_scheme_free(*dst);
-			return ret;
-		}
+	int ret = scheme_copy(*dst, src);
+	if (ret != KNOT_EOK) {
+		yp_scheme_free(*dst);
 	}
 
 	return KNOT_EOK;
 }
 
+int yp_scheme_add(
+	yp_item_t **dst,
+	const yp_item_t *src1,
+	const yp_item_t *src2)
+{
+	if (dst == NULL || src1 == NULL || src2 == NULL) {
+		return KNOT_EINVAL;
+	}
+
+	size_t count1 = scheme_count(src1);
+	size_t count2 = scheme_count(src2);
+
+	// Allocate space for new scheme (+ terminal NULL item).
+	size_t size = (count1 + count2 + 1) * sizeof(yp_item_t);
+	*dst = malloc(size);
+	if (*dst == NULL) {
+		return KNOT_ENOMEM;
+	}
+	memset(*dst, 0, size);
+
+	// Copy the first scheme.
+	int ret = scheme_copy(*dst, src1);
+	if (ret != KNOT_EOK) {
+		yp_scheme_free(*dst);
+	}
+
+	// Copy the second scheme.
+	ret = scheme_copy(*dst + count1, src2);
+	if (ret != KNOT_EOK) {
+		yp_scheme_free(*dst);
+	}
+
+	return KNOT_EOK;
+}
+/*
+int yp_scheme_remove(
+	yp_item_t **dst,
+	const yp_item_t *src1,
+	const yp_item_t *src2)
+{
+	if (dst == NULL || src1 == NULL || src2 == NULL) {
+		return KNOT_EINVAL;
+	}
+
+	size_t count = 0;
+	for (const yp_item_t *item = src; item->name != NULL; item++) {
+		count++;
+	}
+
+	// Try to find the item.
+	for (int i = 0; i < count; i++) {
+		if (src[i].name == NULL) {
+			break;
+		}
+
+		int ret = set_item(dst + i, src + i, dst);
+		if (ret != KNOT_EOK) {
+			return ret;
+		}
+	}
+	// Count source schemes items.
+	size_t count1 = 0;
+	for (const yp_item_t *item = src1; item->name != NULL; item++) {
+		count1++;
+	}
+	size_t count2 = 0;
+	for (const yp_item_t *item = src2; item->name != NULL; item++) {
+		count2++;
+	}
+
+	// Allocate space for new scheme (+ terminal NULL item).
+	size_t size = (count1 + count2 + 1) * sizeof(yp_item_t);
+	*dst = malloc(size);
+	if (*dst == NULL) {
+		return KNOT_ENOMEM;
+	}
+	memset(*dst, 0, size);
+
+	// Copy the first scheme.
+	int ret = scheme_copy(*dst, src1, count1);
+	if (ret != KNOT_EOK) {
+		yp_scheme_free(*dst);
+	}
+
+	// Copy the second scheme.
+	ret = scheme_copy(*dst + count1, src2, count2);
+	if (ret != KNOT_EOK) {
+		yp_scheme_free(*dst);
+	}
+
+	return KNOT_EOK;
+}
+*/
 void yp_scheme_free(
 	yp_item_t *scheme)
 {

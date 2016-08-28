@@ -1,4 +1,4 @@
-/*  Copyright (C) 2015 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -217,6 +217,12 @@ typedef struct {
 int yp_scheme_copy(
 	yp_item_t **dst,
 	const yp_item_t *src
+);
+
+int yp_scheme_add(
+	yp_item_t **dst,
+	const yp_item_t *src1,
+	const yp_item_t *src2
 );
 
 /*!
