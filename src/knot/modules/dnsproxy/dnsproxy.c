@@ -1,4 +1,4 @@
-/*  Copyright (C) 2014 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -14,13 +14,12 @@
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "knot/query/requestor.h"
-#include "knot/common/log.h"
-#include "knot/modules/dnsproxy.h"
-#include "knot/query/capture.h"
-#include "knot/nameserver/process_query.h"
 #include "contrib/mempattern.h"
 #include "contrib/net.h"
+
+#include "knot/modules/dnsproxy/dnsproxy.h"
+#include "knot/query/capture.h"
+#include "knot/query/requestor.h"
 
 /* Module configuration scheme. */
 #define MOD_REMOTE		"\x06""remote"

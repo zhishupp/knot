@@ -18,10 +18,11 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-#include "knot/modules/online_sign/nsec_next.h"
 #include "libknot/consts.h"
 #include "libknot/dname.h"
 #include "libknot/errcode.h"
+
+#include "knot/modules/online_sign/nsec_next.h"
 
 static bool inc_label(const uint8_t *buffer, uint8_t **label_ptr)
 {

@@ -1,4 +1,4 @@
-/*  Copyright (C) 2015 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -18,10 +18,10 @@
 #include <stdlib.h>
 #include <getopt.h>
 
-#include "contrib/getline.h"
-#include "knot/modules/rosedb.c"
-#include "zscanner/scanner.h"
+#include "knot/modules/rosedb/rosedb.c"
 #include "libknot/libknot.h"
+#include "zscanner/scanner.h"
+#include "contrib/getline.h"
 #include "contrib/string.h"
 
 static int rosedb_add(struct cache *cache, MDB_txn *txn, int argc, char *argv[]);
