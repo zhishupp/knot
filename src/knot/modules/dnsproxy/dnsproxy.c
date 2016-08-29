@@ -102,8 +102,7 @@ static int dnsproxy_fwd(int state, knot_pkt_t *pkt, struct query_data *qdata, vo
 	return HIT;
 }
 
-int dnsproxy_load(struct query_plan *plan, struct query_module *self,
-                  const knot_dname_t *zone)
+int dnsproxy_load(struct query_plan *plan, struct query_module *self)
 {
 	if (plan == NULL || self == NULL) {
 		return KNOT_EINVAL;

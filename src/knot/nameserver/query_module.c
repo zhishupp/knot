@@ -127,7 +127,7 @@ static static_module_t *find_module(const yp_name_t *name)
 }
 
 struct query_module *query_module_open(conf_t *config, conf_mod_id_t *mod_id,
-                                       knot_mm_t *mm)
+                                       const knot_dname_t *zone, knot_mm_t *mm)
 {
 	if (config == NULL || mod_id == NULL) {
 		return NULL;
@@ -148,6 +148,7 @@ struct query_module *query_module_open(conf_t *config, conf_mod_id_t *mod_id,
 
 	module->mm = mm;
 	module->config = config;
+	module->zone = zone;
 	module->id = mod_id;
 	module->load = found->load;
 	module->unload = found->unload;

@@ -1,4 +1,4 @@
-/*  Copyright (C) 2014 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -39,8 +39,7 @@ extern const yp_item_t scheme_mod_dnsproxy[];
 int check_mod_dnsproxy(conf_check_t *args);
 
 /*! \brief Module interface. */
-int dnsproxy_load(struct query_plan *plan, struct query_module *self,
-                  const knot_dname_t *zone);
+int dnsproxy_load(struct query_plan *plan, struct query_module *self);
 int dnsproxy_unload(struct query_module *self);
 
 /*! @} */

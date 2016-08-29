@@ -555,30 +555,29 @@ static char *conf_kasp_path(const knot_dname_t *zone)
 	return kasp_db;
 }
 
-int online_sign_load(struct query_plan *plan, struct query_module *module,
-                     const knot_dname_t *zone)
+int online_sign_load(struct query_plan *plan, struct query_module *module)
 {
 	assert(plan);
 	assert(module);
-	assert(zone);
+	assert(module->zone);
 
-	conf_val_t val = conf_zone_get(conf(), C_DNSSEC_SIGNING, zone);
+	conf_val_t val = conf_zone_get(conf(), C_DNSSEC_SIGNING, module->zone);
 	if (conf_bool(&val)) {
-		module_zone_error(zone, "incompatible with automatic signing");
+		module_zone_error(module->zone, "incompatible with automatic signing");
 		return KNOT_ENOTSUP;
 	}
 
-	char *kasp_path = conf_kasp_path(zone);
+	char *kasp_path = conf_kasp_path(module->zone);
 	if (!kasp_path) {
-		module_zone_error(zone, "KASP database is not configured");
+		module_zone_error(module->zone, "KASP database is not configured");
 		return KNOT_ERROR;
 	}
 
 	online_sign_ctx_t *ctx = NULL;
-	int r = online_sign_ctx_new(&ctx, zone, kasp_path);
+	int r = online_sign_ctx_new(&ctx, module->zone, kasp_path);
 	free(kasp_path);
 	if (r != KNOT_EOK) {
-		module_zone_error(zone, "failed to initialize signing key (%s)",
+		module_zone_error(module->zone, "failed to initialize signing key (%s)",
 		                  dnssec_strerror(r));
 		return KNOT_ERROR;
 	}

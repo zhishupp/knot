@@ -218,8 +218,7 @@ static struct fstrm_writer* dnstap_writer(const char *path)
 	return dnstap_file_writer(path);
 }
 
-int dnstap_load(struct query_plan *plan, struct query_module *self,
-                const knot_dname_t *zone)
+int dnstap_load(struct query_plan *plan, struct query_module *self)
 {
 	if (plan == NULL || self == NULL) {
 		return KNOT_EINVAL;
