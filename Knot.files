@@ -277,6 +277,8 @@ src/knot/nameserver/internet.h
 src/knot/nameserver/ixfr.c
 src/knot/nameserver/ixfr.h
 src/knot/nameserver/log.h
+src/knot/nameserver/module.c
+src/knot/nameserver/module.h
 src/knot/nameserver/notify.c
 src/knot/nameserver/notify.h
 src/knot/nameserver/nsec_proofs.c
