@@ -48,17 +48,17 @@ enum {
 /*!
  * \brief Answer query from an IN class zone.
  *
- * \retval FAIL if it encountered an error.
- * \retval DONE if finished.
+ * \retval KNOT_STATE_FAIL if it encountered an error.
+ * \retval KNOT_STATE_DONE if finished.
  */
 int internet_process_query(knot_pkt_t *resp, struct query_data *qdata);
 
 /*!
  * \brief Process answer in an IN class zone.
  *
- * \retval FAIL if it encountered an error.
- * \retval DONE if finished.
- * \retval NOOP if not supported.
+ * \retval KNOT_STATE_FAIL if it encountered an error.
+ * \retval KNOT_STATE_DONE if finished.
+ * \retval KNOT_STATE_NOOP if not supported.
  */
 int internet_process_answer(knot_pkt_t *pkt, struct answer_data *data);
 
