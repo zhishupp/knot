@@ -60,7 +60,7 @@ typedef struct loop_ctx {
 	dthread_t * thread;
 	unsigned *iostate;
 	iohandler_t *handler;
-	ifacelist_t* old_ifaces;
+	ref_t *ref;
 } loop_ctx_t;
 
 typedef struct tcp_ctx {
@@ -83,9 +83,7 @@ typedef struct tcp_client {
 typedef struct tcp_server {
 	tcp_ctx_t ctx;
 	uv_tcp_t handle;
-	server_t *server;
-	unsigned thread_id;
-	ref_t *ifaces_ref;
+	ref_t *ref;
 } tcp_server_t;
 
 typedef struct write_ctx {
@@ -96,7 +94,6 @@ typedef struct write_ctx {
 	uint16_t pktsize;
 	uint8_t buf[KNOT_WIRE_MAX_PKTSIZE];
 } write_ctx_t;
-
 
 static int client_serve(tcp_client_t *client);
 static void on_connection(uv_stream_t* server, int status);
@@ -135,11 +132,11 @@ static tcp_client_t *client_alloc(uv_loop_t *loop)
 static void server_free(void *ctx)
 {
 	tcp_server_t *server = ctx;
-	ref_release(server->ifaces_ref);
+	ref_release(server->ref);
 	free(server);
 }
 
-static int server_alloc_listen(tcp_server_t **res, uv_loop_t *loop, int fd, ref_t *ref)
+static int server_alloc_listen(tcp_server_t **res, uv_loop_t *loop, int fd)
 {
 	tcp_server_t *server;
 	if (loop == NULL || res == NULL) {
@@ -152,11 +149,11 @@ static int server_alloc_listen(tcp_server_t **res, uv_loop_t *loop, int fd, ref_
 	memset(server, 0, sizeof(tcp_server_t));
 	server->ctx.free = server_free;
 	server->ctx.type = TCP_SERVER;
+	server->ref = ((loop_ctx_t *)loop->data)->ref;
+	ref_retain(server->ref);
 	uv_tcp_init(loop, &server->handle);
 	uv_tcp_open(&server->handle, fd);
 	server->handle.data = server;
-	server->ifaces_ref = ref;
-	ref_retain(server->ifaces_ref);
 	int ret = uv_listen((uv_stream_t *) &server->handle, TCP_BACKLOG_SIZE, on_connection);
 	if (ret  < 0) {
 		struct sockaddr_storage ss;
@@ -209,7 +206,6 @@ static int generate_answer(tcp_client_t *client, write_ctx_t *write)
 		}
 	}
 	knot_layer_finish(&client->layer);
-	log_debug("knot_layer:finnish");
 	return DONE;
 }
 
@@ -345,50 +341,21 @@ static void on_close_free(uv_handle_t* handle)
 	}
 }
 
-static void close_client(uv_handle_t* handle, void* arg)
+static void close_tcp(uv_handle_t* handle, void* arg)
 {
 	if (handle->type == UV_TCP) {
-		tcp_ctx_t *ctx = handle->data;
-		if (ctx->type == TCP_CLIENT) {
+		if (!uv_is_closing(handle)) {
 			uv_close(handle, on_close_free);
 		}
 	}
 }
 
-static void close_tcp(uv_handle_t* handle, void* arg)
-{
-	if (handle->type == UV_TCP) {
-		tcp_ctx_t *ctx = handle->data;
-		if (ctx->type == TCP_SERVER) {
-			tcp_server_t *server = handle->data;
-			server->handle.io_watcher.fd = 0;
-		}
-		uv_close(handle, on_close_free);
-	}
-}
-
 static void close_all(uv_handle_t* handle, void* arg)
 {
-	if (handle->type == UV_TCP) {
-		tcp_ctx_t *ctx = handle->data;
-		if (ctx->type == TCP_SERVER) {
-			tcp_server_t *server = handle->data;
-			server->handle.io_watcher.fd = 0;
-			log_debug("tcp");
-		}
-	}
-	log_debug("handle_close");
-	uv_close(handle, on_close_free);
-
-}
-
-static void close_handle_fd(uv_handle_t* handle, void* arg)
-{
-	int fd=-1;
-	uv_fileno(handle, &fd);
-	if (fd == *((int *)arg)) {
+	if (!uv_is_closing(handle)) {
 		uv_close(handle, on_close_free);
 	}
+
 }
 
 static void reconfigure_loop(uv_loop_t *loop)
@@ -396,29 +363,23 @@ static void reconfigure_loop(uv_loop_t *loop)
 	loop_ctx_t *tcp = loop->data;
 	iface_t *i = NULL;
 
-	uv_walk(loop, close_tcp, NULL);
-	/*uv_walk(loop, close_client, NULL);
-	if (tcp->old_ifaces != NULL) {
-		WALK_LIST(i, tcp->old_ifaces->u) {
-			uv_walk(loop, close_handle_fd, &i->fd_tcp);
-		}
-		ref_release(&tcp->old_ifaces->ref);
-	}*/
+	uv_walk(loop, close_tcp , NULL);
 
 	rcu_read_lock();
-	tcp->old_ifaces  = tcp->handler->server->ifaces;
+	ref_release(tcp->ref);
+	tcp->ref  = &tcp->handler->server->ifaces->ref;
 	int multiproccess = tcp->server->handlers[IO_TCP].size > 1;
 	WALK_LIST(i, tcp->handler->server->ifaces->l) {
 		tcp_server_t *server;
-		if (server_alloc_listen(&server, loop, i->fd_tcp,
-		    &tcp->old_ifaces->ref) == KNOT_EOK) {
+		int fd = dup(i->fd_tcp);
+		if (server_alloc_listen(&server, loop, fd) == KNOT_EOK) {
 			uv_tcp_simultaneous_accepts(&server->handle, !multiproccess);
 		}
 	}
 	rcu_read_unlock();
 }
 
-static void cancel_check(uv_idle_t* handle)
+static void cancel_check(uv_signal_t* handle, int signum)
 {
 	loop_ctx_t *tcp = handle->loop->data;
 	dthread_t *thread = tcp->thread;
@@ -477,9 +438,9 @@ int tcp_master(dthread_t *thread)
 	uv_loop_init(&loop);
 	loop.data = &tcp;
 
-	uv_idle_t cancel_point;
-	uv_idle_init(&loop, &cancel_point);
-	uv_idle_start(&cancel_point, cancel_check);
+	uv_signal_t cancel_point;
+	uv_signal_init(&loop, &cancel_point);
+	uv_signal_start(&cancel_point, cancel_check, SIGALRM);
 
 	uv_timer_t sweep_timer;
 	uv_timer_init(&loop, &sweep_timer);
@@ -493,6 +454,6 @@ int tcp_master(dthread_t *thread)
 	uv_run(&loop, UV_RUN_ONCE);
 	uv_loop_close(&loop);
 
-	ref_release(&tcp.old_ifaces->ref);
+	ref_release(tcp.ref);
 	return ret;
 }
