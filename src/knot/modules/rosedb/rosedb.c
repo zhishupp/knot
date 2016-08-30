@@ -591,7 +591,7 @@ static int rosedb_query_txn(MDB_txn *txn, MDB_dbi dbi, knot_pkt_t *pkt, struct q
 static int rosedb_query(int state, knot_pkt_t *pkt, struct query_data *qdata, void *ctx)
 {
 	if (pkt == NULL || qdata == NULL || ctx == NULL) {
-		return KNOT_STATE_FAIL;
+		return ERROR;
 	}
 
 	struct cache *cache = ctx;
@@ -610,7 +610,7 @@ static int rosedb_query(int state, knot_pkt_t *pkt, struct query_data *qdata, vo
 
 	mdb_txn_abort(txn);
 
-	return KNOT_STATE_DONE;
+	return HIT;
 }
 
 int rosedb_load(struct query_plan *plan, struct query_module *self,

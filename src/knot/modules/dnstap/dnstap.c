@@ -64,10 +64,9 @@ static int log_message(int state, const knot_pkt_t *pkt, struct query_data *qdat
                        dnstap_ctx_t *ctx)
 {
 	if (pkt == NULL || qdata == NULL || ctx == NULL) {
-		return KNOT_STATE_FAIL;
+		return ERROR;
 	}
 
-	int ret = KNOT_ERROR;
 	struct fstrm_iothr_queue *ioq =
 		fstrm_iothr_get_input_queue_idx(ctx->iothread, qdata->param->thread_id);
 
@@ -90,13 +89,13 @@ static int log_message(int state, const knot_pkt_t *pkt, struct query_data *qdat
 
 	/* Create a dnstap message. */
 	Dnstap__Message msg;
-	ret = dt_message_fill(&msg, msgtype,
-	                      (const struct sockaddr *)qdata->param->remote,
-	                      NULL, /* todo: fill me! */
-	                      protocol,
-	                      pkt->wire, pkt->size, &tv, &tv);
+	int ret = dt_message_fill(&msg, msgtype,
+	                          (const struct sockaddr *)qdata->param->remote,
+	                          NULL, /* todo: fill me! */
+	                          protocol,
+	                          pkt->wire, pkt->size, &tv, &tv);
 	if (ret != KNOT_EOK) {
-		return KNOT_STATE_FAIL;
+		return ERROR;
 	}
 	Dnstap__Dnstap dnstap = DNSTAP__DNSTAP__INIT;
 	dnstap.type = DNSTAP__DNSTAP__TYPE__MESSAGE;
@@ -119,7 +118,7 @@ static int log_message(int state, const knot_pkt_t *pkt, struct query_data *qdat
 	size_t size = 0;
 	dt_pack(&dnstap, &frame, &size);
 	if (frame == NULL) {
-		return KNOT_STATE_FAIL;
+		return ERROR;
 	}
 
 	/* Submit a request. */
@@ -127,7 +126,7 @@ static int log_message(int state, const knot_pkt_t *pkt, struct query_data *qdat
 	                                   fstrm_free_wrapper, NULL);
 	if (res != fstrm_res_success) {
 		free(frame);
-		state = KNOT_STATE_FAIL;
+		state = ERROR;
 	}
 
 	return state;
@@ -138,7 +137,7 @@ static int dnstap_message_log_query(int state, knot_pkt_t *pkt, struct query_dat
                                     void *ctx)
 {
 	if (qdata == NULL) {
-		return KNOT_STATE_FAIL;
+		return ERROR;
 	}
 
 	return log_message(state, qdata->query, qdata, ctx);
