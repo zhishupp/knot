@@ -477,7 +477,7 @@ static int process_query_out(knot_layer_t *ctx, knot_pkt_t *pkt)
 	rcu_read_lock();
 
 	struct query_data *qdata = QUERY_DATA(ctx);
-	struct query_plan *plan = conf()->query_plan;
+	struct query_plan *global_plan = conf()->query_plan;
 	struct query_step *step = NULL;
 
 	/* Check parse state. */
@@ -500,8 +500,8 @@ static int process_query_out(knot_layer_t *ctx, knot_pkt_t *pkt)
 	}
 
 	/* Before query processing code. */
-	if (plan) {
-		WALK_LIST(step, plan->stage[QPLAN_BEGIN]) {
+	if (global_plan != NULL) {
+		WALK_LIST(step, global_plan->stage[QPLAN_BEGIN]) {
 			next_state = step->process(next_state, pkt, qdata, step->ctx);
 		}
 	}
@@ -560,11 +560,11 @@ finish:
 			next_state = KNOT_STATE_FAIL;
 		}
 	}
-	/* In case of NS_PROC_FAIL, RCODE is set in the error-processing function. */
+	/* In case of KNOT_STATE_FAIL, RCODE is set in the error-processing function. */
 
 	/* After query processing code. */
-	if (plan) {
-		WALK_LIST(step, plan->stage[QPLAN_END]) {
+	if (global_plan != NULL) {
+		WALK_LIST(step, global_plan->stage[QPLAN_END]) {
 			next_state = step->process(next_state, pkt, qdata, step->ctx);
 		}
 	}

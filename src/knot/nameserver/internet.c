@@ -736,9 +736,10 @@ int ns_put_rr(knot_pkt_t *pkt, const knot_rrset_t *rr,
 		return KNOT_STATE_FAIL; \
 	}
 
-static int answer_query(struct query_plan *plan, knot_pkt_t *response, struct query_data *qdata)
+static int answer_query(knot_pkt_t *response, struct query_data *qdata)
 {
 	int state = BEGIN;
+	struct query_plan *plan = qdata->zone->query_plan;
 	struct query_plan *global_plan = conf()->query_plan;
 	struct query_step *step = NULL;
 
@@ -832,7 +833,7 @@ int internet_process_query(knot_pkt_t *response, struct query_data *qdata)
 	/* Get answer to QNAME. */
 	qdata->name = knot_pkt_qname(qdata->query);
 
-	return answer_query(qdata->zone->query_plan, response, qdata);
+	return answer_query(response, qdata);
 }
 
 #include "knot/nameserver/log.h"
