@@ -145,4 +145,21 @@ void process_query_qname_case_restore(struct query_data *qdata, knot_pkt_t *pkt)
  */
 int process_query_qname_case_lower(knot_pkt_t *pkt);
 
+/*!
+ * \brief Puts RRSet to packet, will store its RRSIG for later use.
+ *
+ * \param pkt         Packet to store RRSet into.
+ * \param qdata       Query data structure.
+ * \param rr          RRSet to be stored.
+ * \param rrsigs      RRSIGs to be stored.
+ * \param compr_hint  Compression hint.
+ * \param flags       Flags.
+ * \param expand      Set to true if wildcards should be expanded.
+ *
+ * \return KNOT_E*
+ */
+int process_query_put_rr(knot_pkt_t *pkt, struct query_data *qdata,
+                         const knot_rrset_t *rr, const knot_rrset_t *rrsigs,
+                         uint16_t compr_hint, uint32_t flags);
+
 /*! @} */
