@@ -285,6 +285,17 @@ const char *dnssec_kasp_zone_get_policy(dnssec_kasp_zone_t *zone);
 int dnssec_kasp_zone_set_policy(dnssec_kasp_zone_t *zone, const char *name);
 
 /*!
+ * Policy options for CDS/CDNSKEY publication.
+ */
+enum dnssec_kasp_policy_cds {
+	DNSSEC_CDS_NONE   = 0,
+	DNSSEC_CDS_SHA1   = DNSSEC_KEY_DIGEST_SHA1,
+	DNSSEC_CDS_SHA256 = DNSSEC_KEY_DIGEST_SHA256,
+	DNSSEC_CDS_SHA384 = DNSSEC_KEY_DIGEST_SHA384,
+	DNSSEC_CDS_DNSKEY = 0x100,
+};
+
+/*!
  * Key and signature policy.
  *
  * \todo Move into internal API and add getters/setters (probably).
@@ -313,6 +324,8 @@ typedef struct dnssec_kasp_policy {
 	uint32_t zone_maximal_ttl;
 	// data propagation delay
 	uint32_t propagation_delay;
+	// CDS/CDNSKEY publication (RFC 7344)
+	enum dnssec_kasp_policy_cds cds;
 } dnssec_kasp_policy_t;
 
 /*!
