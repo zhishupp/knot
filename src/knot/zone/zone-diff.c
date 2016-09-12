@@ -149,8 +149,8 @@ static int rdata_return_changes(const knot_rrset_t *rrset1,
 	return KNOT_EOK;
 }
 
-static int diff_rrsets(const knot_rrset_t *rrset1, const knot_rrset_t *rrset2,
-                       changeset_t *changeset)
+int zone_diff_rrset(const knot_rrset_t *rrset1, const knot_rrset_t *rrset2,
+                    changeset_t *changeset)
 {
 	if (changeset == NULL || (rrset1 == NULL && rrset2 == NULL)) {
 		return KNOT_EINVAL;
@@ -251,8 +251,8 @@ static int knot_zone_diff_node(zone_node_t **node_ptr, void *data)
 			}
 		} else {
 			/* Diff RRSets. */
-			int ret = diff_rrsets(&rrset, &rrset_from_second_node,
-			                      param->changeset);
+			int ret = zone_diff_rrset(&rrset, &rrset_from_second_node,
+			                          param->changeset);
 			if (ret != KNOT_EOK) {
 				return ret;
 			}

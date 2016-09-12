@@ -20,6 +20,12 @@
 #include "knot/updates/changesets.h"
 
 /*!
+ * \brief Diff two RR sets.
+ */
+int zone_diff_rrset(const knot_rrset_t *from, const knot_rrset_t *to,
+                    changeset_t *changeset);
+
+/*!
  * \brief Create diff between two zone trees.
  * */
 int zone_contents_diff(const zone_contents_t *zone1, const zone_contents_t *zone2,
