@@ -29,6 +29,7 @@
 #include "knot/dnssec/zone-keys.h"
 #include "knot/dnssec/zone-sign.h"
 #include "knot/updates/changesets.h"
+#include "knot/zone/zone-diff.h"
 #include "libknot/descriptor.h"
 #include "libknot/dname.h"
 #include "libknot/libknot.h"
@@ -904,6 +905,95 @@ static int update_dnskeys(const zone_contents_t *zone,
 	return update_dnskey_rrsigs(&dnskeys, &rrsigs, &soa, zone_keys,
 	                            dnssec_ctx, changeset, expires_at);
 }
+
+struct key_rr {
+	uint16_t type;
+	bool (*matches)(const zone_key_t *key);
+	int (*construct)(knot_rrset_t *target, const zone_key_t *key, uint16_t ttl);
+};
+
+static int update_key_rrset(knot_rrset_t *keys,
+                            const struct key_rr *rule,
+                            const zone_keyset_t *zone_keys,
+                            uint16_t ttl)
+{
+	for (int i = 0; i < zone_keys->count; i++) {
+		const zone_key_t *key = &zone_keys->keys[i];
+		if (!rule->matches(key)) {
+			continue;
+		}
+
+		int ret = rule->construct(keys, key, ttl);
+		if (ret != KNOT_EOK) {
+			return ret;
+		}
+	}
+
+	return KNOT_EOK;
+}
+
+static bool key_match_public(const zone_key_t *key)
+{
+	return key->is_public;
+}
+
+static bool key_match_public_delegation(const zone_key_t *key)
+{
+	return key->is_public && key->is_ksk;
+}
+
+static int key_add_dnskey(knot_rrset_t *rr, const zone_key_t *key, uint16_t ttl)
+{
+	dnssec_binary_t rdata = { 0 };
+	dnssec_key_get_rdata(key->key, &rdata);
+
+	return knot_rrset_add_rdata(rr, rdata.data, rdata.size, ttl, NULL);
+}
+
+static int key_add_ds(knot_rrset_t *rr, const zone_key_t *key, uint16_t ttl)
+{
+	dnssec_binary_t rdata = { 0 };
+	int ret = dnssec_key_create_ds(key->key, DNSSEC_KEY_DIGEST_SHA256, &rdata);
+	if (ret != DNSSEC_EOK) {
+		return KNOT_ENOMEM;
+	}
+
+	ret = knot_rrset_add_rdata(rr, rdata.data, rdata.size, ttl, NULL);
+	dnssec_binary_free(&rdata);
+
+	return ret;
+}
+
+static int update_keys(const zone_contents_t *zone,
+                       const zone_keyset_t *zone_keys,
+                       const kdnssec_ctx_t *dnssec_ctx,
+                       changeset_t *changeset)
+{
+	knot_rrset_t soa = node_rrset(zone->apex, KNOT_RRTYPE_SOA);
+
+	const struct key_rr _rule = {
+		KNOT_RRTYPE_CDNSKEY,
+		key_match_public_delegation,
+		key_add_dnskey
+	};
+
+	const struct key_rr *rule = &_rule;
+
+	knot_rrset_t rr = rrset_init_from(&soa, rule->type);
+	int ret = update_key_rrset(&rr, rule, zone_keys, knot_rrset_ttl(&soa));
+	if (ret != KNOT_EOK) {
+		// TODO: leak rrset
+		return ret;
+	}
+
+	knot_rrset_t old = node_rrset(zone->apex, rule->type);
+	ret = zone_diff_rrset(&old, &rr, changeset);
+	
+
+
+
+}
+
 
 /*!
  * \brief Goes through list and looks for RRSet type there.
