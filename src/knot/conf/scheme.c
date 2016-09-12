@@ -25,8 +25,9 @@
 #include "knot/server/rrl.h"
 #include "knot/updates/acl.h"
 #include "libknot/rrtype/opt.h"
-#include "dnssec/lib/dnssec/tsig.h"
+#include "dnssec/lib/dnssec/kasp.h"
 #include "dnssec/lib/dnssec/key.h"
+#include "dnssec/lib/dnssec/tsig.h"
 
 #include "knot/modules/synth_record.h"
 #include "knot/modules/dnsproxy.h"
@@ -68,6 +69,15 @@ static const knot_lookup_t dnssec_key_algs[] = {
 	{ DNSSEC_KEY_ALGORITHM_RSA_SHA512,        "rsasha512" },
 	{ DNSSEC_KEY_ALGORITHM_ECDSA_P256_SHA256, "ecdsap256sha256" },
 	{ DNSSEC_KEY_ALGORITHM_ECDSA_P384_SHA384, "ecdsap384sha384" },
+	{ 0, NULL }
+};
+
+static const knot_lookup_t dnssec_cds[] = {
+	{ DNSSEC_CDS_NONE,     "none" },
+	{ DNSSEC_CDS_SHA1,     "sha-1" },
+	{ DNSSEC_CDS_SHA256,   "sha-256" },
+	{ DNSSEC_CDS_SHA384,   "sha-384" },
+	{ DNSSEC_CDS_DNSKEY,   "dnskey" },
 	{ 0, NULL }
 };
 
@@ -169,6 +179,7 @@ static const yp_item_t desc_policy[] = {
 	{ C_NSEC3_SALT_LEN,      YP_TINT,  YP_VINT = { 0, UINT8_MAX, 8 } },
 	{ C_NSEC3_SALT_LIFETIME, YP_TINT,  YP_VINT = { 1, UINT32_MAX, DAYS(30), YP_STIME } },
 	{ C_PROPAG_DELAY,        YP_TINT,  YP_VINT = { 0, UINT32_MAX, HOURS(1), YP_STIME } },
+	{ C_CDS,                 YP_TOPT,  YP_VOPT = { dnssec_cds, DNSSEC_CDS_NONE } },
 	{ C_COMMENT,             YP_TSTR,  YP_VNONE },
 	{ NULL }
 };

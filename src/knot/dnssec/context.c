@@ -99,6 +99,9 @@ static int policy_load(void *ctx, dnssec_kasp_policy_t *policy)
 	val = conf_rawid_get(conf(), C_POLICY, C_PROPAG_DELAY, id, id_len);
 	policy->propagation_delay = conf_int(&val);
 
+	val = conf_rawid_get(conf(), C_POLICY, C_CDS, id, id_len);
+	policy->cds = conf_opt(&val);
+
 	return DNSSEC_EOK;
 }
 

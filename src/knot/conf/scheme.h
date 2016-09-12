@@ -39,6 +39,7 @@
 #define C_COMMENT		"\x07""comment"
 #define C_CONFIG		"\x06""config"
 #define C_CTL			"\x07""control"
+#define C_CDS			"\x03""cds"
 #define C_DDNS_MASTER		"\x0B""ddns-master"
 #define C_DENY			"\x04""deny"
 #define C_DISABLE_ANY		"\x0B""disable-any"
