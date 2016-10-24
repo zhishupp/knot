@@ -45,12 +45,12 @@ void close_timers_db(knot_db_t *timer_db);
  *          ZONE_EVENT_FLUSH
  *
  * \param timer_db  Timer database.
- * \param zone      Zone to read timers for.
+ * \param zone      Name of zone to read timers for.
  * \param timers    Output array with timers (size must be ZONE_EVENT_COUNT).
  *
  * \return KNOT_E*
  */
-int read_zone_timers(knot_db_t *timer_db, const zone_t *zone, time_t *timers);
+int read_zone_timers(knot_db_t *timer_db, const knot_dname_t *zone, time_t *timers);
 
 /*!
  * \brief Writes all zone timers to timers db.

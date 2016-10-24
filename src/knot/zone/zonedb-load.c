@@ -176,7 +176,7 @@ static int reuse_events(conf_t *conf, knot_db_t *timer_db, zone_t *zone)
 	// Get persistent timers
 
 	time_t timers[ZONE_EVENT_COUNT] = { 0 };
-	int ret = read_zone_timers(timer_db, zone, timers);
+	int ret = read_zone_timers(timer_db, zone->name, timers);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}

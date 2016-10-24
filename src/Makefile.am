@@ -482,7 +482,7 @@ endif # HAVE_DAEMON
 
 if HAVE_UTILS
 
-bin_PROGRAMS = kdig khost knsec3hash knsupdate kzonecheck
+bin_PROGRAMS = kdig khost knsec3hash knsupdate kzonecheck kntimers
 if !HAVE_DAEMON
 noinst_LTLIBRARIES += libknotd.la
 endif
@@ -518,6 +518,9 @@ kzonecheck_SOURCES =				\
 	utils/kzonecheck/main.c			\
 	utils/kzonecheck/zone_check.c		\
 	utils/kzonecheck/zone_check.h
+	
+kzonecheck_SOURCES =				\
+	utils/kzonecheck/main.c
 
 # bin programs
 kdig_CPPFLAGS       = $(AM_CPPFLAGS) $(gnutls_CFLAGS)
@@ -529,6 +532,8 @@ knsupdate_LDADD     = zscanner/libzscanner.la libknotus.la
 knsec3hash_CPPFLAGS = $(AM_CPPFLAGS) -I$(srcdir)/dnssec/lib/dnssec -I$(srcdir)/dnssec
 knsec3hash_LDADD    = dnssec/libdnssec.la dnssec/libshared.la
 kzonecheck_LDADD = libknotd.la
+kntimers_CPPFLAGS      = $(AM_CPPFLAGS) $(gnutls_CFLAGS)
+kntimers_LDADD         = $(libidn_LIBS) libknotd.la
 
 #######################################
 # Optional Knot DNS Utilities modules #

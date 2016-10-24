@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
 
 	// Read the timers.
 	time_t timers[ZONE_EVENT_COUNT];
-	ret = read_zone_timers(db, zone_1, timers);
+	ret = read_zone_timers(db, zone_1->name, timers);
 	ok(ret == KNOT_EOK &&
 	   timers[ZONE_EVENT_REFRESH] == REFRESH_TIME &&
 	   timers[ZONE_EVENT_EXPIRE] == EXPIRE_TIME &&
@@ -94,7 +94,7 @@ int main(int argc, char *argv[])
 	// Sweep and read again - timers should stay the same.
 	int s_ret = sweep_timer_db(db, zone_db);
 	if (s_ret == KNOT_EOK) {
-		ret = read_zone_timers(db, zone_1, timers);
+		ret = read_zone_timers(db, zone_1->name, timers);
 	}
 	ok(s_ret == KNOT_EOK && ret == KNOT_EOK &&
 	   timers[ZONE_EVENT_REFRESH] == REFRESH_TIME &&
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
 
 	// Read timers for unset zone.
 	const time_t empty_timers[ZONE_EVENT_COUNT] = { '\0' };
-	ret = read_zone_timers(db, zone_2, timers);
+	ret = read_zone_timers(db, zone_2->name, timers);
 	ok(ret == KNOT_EOK &&
 	   memcmp(timers, empty_timers, sizeof(timers)) == 0, "zone timers: read unset");
 
@@ -113,7 +113,7 @@ int main(int argc, char *argv[])
 
 	s_ret = sweep_timer_db(db, zone_db);
 	if (s_ret == KNOT_EOK) {
-		ret = read_zone_timers(db, zone_1, timers);
+		ret = read_zone_timers(db, zone_1->name, timers);
 	}
 	ok(s_ret == KNOT_EOK && ret == KNOT_EOK &&
 	   memcmp(timers, empty_timers, sizeof(timers)) == 0, "zone timers: sweep");

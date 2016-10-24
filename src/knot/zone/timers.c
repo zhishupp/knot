@@ -102,12 +102,12 @@ static int store_timers(zone_t *zone, knot_db_txn_t *txn)
 }
 
 /*! \brief Reads timers for persistent events. */
-static int read_timers(knot_db_txn_t *txn, const zone_t *zone, time_t *timers)
+static int read_timers(knot_db_txn_t *txn, const knot_dname_t *zone, time_t *timers)
 {
 	const knot_db_api_t *db_api = knot_db_lmdb_api();
 	assert(db_api);
 
-	knot_db_val_t key = { .len = knot_dname_size(zone->name), .data = zone->name };
+	knot_db_val_t key = { .len = knot_dname_size(zone), .data = zone };
 	knot_db_val_t val;
 
 	int ret = db_api->find(txn, &key, &val, 0);
@@ -163,7 +163,7 @@ void close_timers_db(knot_db_t *timer_db)
 	db_api->deinit(timer_db);
 }
 
-int read_zone_timers(knot_db_t *timer_db, const zone_t *zone, time_t *timers)
+int read_zone_timers(knot_db_t *timer_db, const knot_dname_t *zone, time_t *timers)
 {
 	if (timer_db == NULL) {
 		clear_timers(timers);
