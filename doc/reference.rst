@@ -814,7 +814,7 @@ as a relative path to the *default* template :ref:`storage<zone_storage>`.
 global-module
 -------------
 
-An ordered list of references to query modules in the form
+An ordered list of references to query modules in the form of *module_name* or
 *module_name/module_id*. These modules apply to all queries.
 
 .. NOTE::
@@ -834,8 +834,9 @@ Definition of zones served by the server.
  zone:
    - domain: DNAME
      template: template_id
-     file: STR
      storage: STR
+     file: STR
+     journal: STR
      master: remote_id ...
      ddns-master: remote_id
      notify: remote_id ...
@@ -869,6 +870,15 @@ A :ref:`reference<template_id>` to a configuration template.
 
 *Default:* not set or *default* (if the template exists)
 
+.. _zone_storage:
+
+storage
+-------
+
+A data directory for storing zone files, journal files and timers database.
+
+*Default:* ``${localstatedir}/lib/knot`` (configured with ``--with-storage=path``)
+
 .. _zone_file:
 
 file
@@ -880,8 +890,8 @@ A path to the zone file. Non absolute path is relative to
 - ``%c[``\ *N*\ ``]`` or ``%c[``\ *N*\ ``-``\ *M*\ ``]`` – means the *N*\ th
   character or a sequence of characters beginning from the *N*\ th and ending
   with the *M*\ th character of the textual zone name (see ``%s``). The
-  indexes are counted from 0 from the left. If the character is not available,
-  the formatter has no effect.
+  indexes are counted from 0 from the left. All dots (including the terminal
+  one) are considered. If the character is not available, the formatter has no effect.
 - ``%l[``\ *N*\ ``]`` – means the *N*\ th label of the textual zone name
   (see ``%s``). The index is counted from 0 from the right (0 ~ TLD).
   If the label is not available, the formatter has no effect.
@@ -893,14 +903,16 @@ A path to the zone file. Non absolute path is relative to
 
 *Default:* :ref:`storage<zone_storage>`/``%s``\ .zone
 
-.. _zone_storage:
+.. _zone_journal:
 
-storage
+journal
 -------
 
-A data directory for storing zone files, journal files and timers database.
+A path to the zone journal. Non absolute path is relative to
+:ref:`storage<zone_storage>`. The same set of formatters as for
+:ref:`file<zone_file>` is supported.
 
-*Default:* ``${localstatedir}/lib/knot`` (configured with ``--with-storage=path``)
+*Default:* :ref:`storage<zone_storage>`/``%s``\ .db
 
 .. _zone_master:
 
@@ -1113,7 +1125,7 @@ Possible values:
 module
 ------
 
-An ordered list of references to query modules in the form
+An ordered list of references to query modules in the form of *module_name* or
 *module_name/module_id*. These modules apply only to the current zone queries.
 
 *Default:* not set
@@ -1418,61 +1430,3 @@ dbdir
 A path to the directory where the database is stored.
 
 *Required*
-
-.. _mod-online-sign:
-
-Module online-sign
-==================
-
-The module provides online DNSSEC signing.
-
-::
-
- mod-online-sign:
-   - id: STR
-
-.. _mod-online-sign_id:
-
-id
---
-
-A module identifier.
-
-.. _mod-whoami:
-
-Module whoami
-=============
-
-The module synthesizes an A or AAAA record containing the query source IP address, 
-at the apex of the zone being served.
-
-::
-
- mod-whoami:
-   - id: STR
-
-.. _mod-whoami_id:
-
-id
---
-
-A module identifier.
-
-.. _mod-noudp:
-
-Module noudp
-============
-
-The module sends empty truncated response to any UDP query.
-
-::
-
- mod-noudp:
-   - id: STR
-
-.. _mod-noudp_id:
-
-id
---
-
-A module identifier.

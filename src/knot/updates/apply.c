@@ -51,10 +51,8 @@ static int free_additional(zone_node_t **node, void *data)
 
 	for (uint16_t i = 0; i < (*node)->rrset_count; ++i) {
 		struct rr_data *data = &(*node)->rrs[i];
-		if (data->additional) {
-			free(data->additional);
-			data->additional = NULL;
-		}
+		additional_clear(data->additional);
+		data->additional = NULL;
 	}
 
 	return KNOT_EOK;
@@ -149,7 +147,7 @@ static bool can_remove(const zone_node_t *node, const knot_rrset_t *rr)
 static int apply_remove(apply_ctx_t *ctx, changeset_t *chset)
 {
 	changeset_iter_t itt;
-	changeset_iter_rem(&itt, chset, false);
+	changeset_iter_rem(&itt, chset);
 
 	knot_rrset_t rr = changeset_iter_next(&itt);
 	while (!knot_rrset_empty(&rr)) {
@@ -170,7 +168,7 @@ static int apply_remove(apply_ctx_t *ctx, changeset_t *chset)
 static int apply_add(apply_ctx_t *ctx, changeset_t *chset)
 {
 	changeset_iter_t itt;
-	changeset_iter_add(&itt, chset, false);
+	changeset_iter_add(&itt, chset);
 
 	knot_rrset_t rr = changeset_iter_next(&itt);
 	while(!knot_rrset_empty(&rr)) {

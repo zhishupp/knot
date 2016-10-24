@@ -30,12 +30,6 @@
 #include "contrib/mempattern.h"
 #include "contrib/sockaddr.h"
 
-/*! \brief Kind of additional record. */
-enum additional_kind {
-	ADDITIONAL_OPTIONAL = 0,
-	ADDITIONAL_MANDATORY,
-};
-
 /*! \brief Check if given node was already visited. */
 static int wildcard_has_visited(struct query_data *qdata, const zone_node_t *node)
 {
@@ -281,47 +275,40 @@ static int put_delegation(knot_pkt_t *pkt, struct query_data *qdata)
 
 /*! \brief Put additional records for given RR. */
 static int put_additional(knot_pkt_t *pkt, const knot_rrset_t *rr,
-                          struct query_data *qdata, knot_rrinfo_t *info,
-                          int state, enum additional_kind kind)
+                          struct query_data *qdata, knot_rrinfo_t *info, int state)
 {
+	if (rr->additional == NULL) {
+		return KNOT_EOK;
+	}
+
 	/* Valid types for ADDITIONALS insertion. */
 	/* \note Not resolving CNAMEs as MX/NS name must not be an alias. (RFC2181/10.3) */
-	static const uint16_t ar_type_list[] = {KNOT_RRTYPE_A, KNOT_RRTYPE_AAAA};
+	static const uint16_t ar_type_list[] = { KNOT_RRTYPE_A, KNOT_RRTYPE_AAAA };
 	static const int ar_type_count = 2;
 
 	int ret = KNOT_EOK;
 
-	/* All RRs should have additional node cached or NULL. */
-	for (uint16_t i = 0; i < rr->rrs.rr_count; i++) {
-		const zone_node_t *node = rr->additional[i];
-		if (node == NULL) {
-			continue;
+	additional_t *additional = (additional_t *)rr->additional;
+
+	/* Iterate over the additionals. */
+	for (uint16_t i = 0; i < additional->count; i++) {
+		glue_t *glue = &additional->glues[i];
+		uint32_t flags = KNOT_PF_NULL;
+
+		/* Optional glue doesn't cause truncation. (RFC 1034/4.3.2 step 3b). */
+		if (state != DELEG || glue->optional) {
+			flags |= KNOT_PF_NOTRUNC;
 		}
 
-		bool is_notauth = (node->flags & (NODE_FLAGS_DELEG | NODE_FLAGS_NONAUTH));
-		bool is_glue = is_notauth &&
-		               state == DELEG && rr->type == KNOT_RRTYPE_NS &&
-		               knot_dname_in(rr->owner, node->owner);
-
-		/* Non-authoritative node allowed only as a glue. */
-		if (is_notauth && !is_glue) {
-			continue;
-		}
-
-		/* Glue is required as per RFC 1034 Section 4.3.2 step 3b. */
-		if (kind != (is_glue ? ADDITIONAL_MANDATORY : ADDITIONAL_OPTIONAL)) {
-			continue;
-		}
-
-		uint32_t flags = KNOT_PF_CHECKDUP | (is_glue ? 0 : KNOT_PF_NOTRUNC);
-		uint16_t hint = knot_pkt_compr_hint(info, KNOT_COMPR_HINT_RDATA + i);
-		knot_rrset_t rrsigs = node_rrset(node, KNOT_RRTYPE_RRSIG);
+		uint16_t hint = knot_pkt_compr_hint(info, KNOT_COMPR_HINT_RDATA +
+		                                    glue->ns_pos);
+		knot_rrset_t rrsigs = node_rrset(glue->node, KNOT_RRTYPE_RRSIG);
 		for (int k = 0; k < ar_type_count; ++k) {
-			knot_rrset_t additional = node_rrset(node, ar_type_list[k]);
-			if (knot_rrset_empty(&additional)) {
+			knot_rrset_t rrset = node_rrset(glue->node, ar_type_list[k]);
+			if (knot_rrset_empty(&rrset)) {
 				continue;
 			}
-			ret = ns_put_rr(pkt, &additional, &rrsigs, hint, flags, qdata);
+			ret = ns_put_rr(pkt, &rrset, &rrsigs, hint, flags, qdata);
 			if (ret != KNOT_EOK) {
 				break;
 			}
@@ -336,7 +323,6 @@ static int follow_cname(knot_pkt_t *pkt, uint16_t rrtype, struct query_data *qda
 	const zone_node_t *cname_node = qdata->node;
 	knot_rrset_t cname_rr = node_rrset(qdata->node, rrtype);
 	knot_rrset_t rrsigs = node_rrset(qdata->node, KNOT_RRTYPE_RRSIG);
-	int ret = KNOT_EOK;
 
 	assert(!knot_rrset_empty(&cname_rr));
 
@@ -345,7 +331,7 @@ static int follow_cname(knot_pkt_t *pkt, uint16_t rrtype, struct query_data *qda
 
 	/* Now, try to put CNAME to answer. */
 	uint16_t rr_count_before = pkt->rrset_count;
-	ret = ns_put_rr(pkt, &cname_rr, &rrsigs, 0, flags, qdata);
+	int ret = ns_put_rr(pkt, &cname_rr, &rrsigs, 0, flags, qdata);
 	switch (ret) {
 	case KNOT_EOK:    break;
 	case KNOT_ESPACE: return TRUNC;
@@ -365,8 +351,8 @@ static int follow_cname(knot_pkt_t *pkt, uint16_t rrtype, struct query_data *qda
 			return ERROR;
 		}
 		knot_rrset_t dname_rr = cname_rr;
-		ret = dname_cname_synth(&dname_rr, qdata->name, &cname_rr,
-		                        &pkt->mm);
+		int ret = dname_cname_synth(&dname_rr, qdata->name, &cname_rr,
+		                            &pkt->mm);
 		if (ret != KNOT_EOK) {
 			qdata->rcode = KNOT_RCODE_SERVFAIL;
 			return ERROR;
@@ -444,8 +430,8 @@ static int name_not_found(knot_pkt_t *pkt, struct query_data *qdata)
 	if (qdata->encloser->flags & NODE_FLAGS_WILDCARD_CHILD) {
 		/* Find wildcard child in the zone. */
 		const zone_node_t *wildcard_node =
-		                zone_contents_find_wildcard_child(
-		                        qdata->zone->contents, qdata->encloser);
+			zone_contents_find_wildcard_child(
+				qdata->zone->contents, qdata->encloser);
 
 		qdata->node = wildcard_node;
 		assert(qdata->node != NULL);
@@ -480,10 +466,10 @@ static int name_not_found(knot_pkt_t *pkt, struct query_data *qdata)
 static int solve_name(int state, knot_pkt_t *pkt, struct query_data *qdata)
 {
 	int ret = zone_contents_find_dname(qdata->zone->contents, qdata->name,
-	                                        &qdata->node, &qdata->encloser,
-	                                        &qdata->previous);
+	                                   &qdata->node, &qdata->encloser,
+	                                   &qdata->previous);
 
-	switch(ret) {
+	switch (ret) {
 	case ZONE_NAME_FOUND:
 		return name_found(pkt, qdata);
 	case ZONE_NAME_NOT_FOUND:
@@ -523,7 +509,7 @@ static int solve_answer_dnssec(int state, knot_pkt_t *pkt, struct query_data *qd
 
 	/* RFC4035, section 3.1 RRSIGs for RRs in ANSWER are mandatory. */
 	int ret = nsec_append_rrsigs(pkt, qdata, false);
-	switch(ret) {
+	switch (ret) {
 	case KNOT_ESPACE: return TRUNC;
 	case KNOT_EOK:    return state;
 	default:          return ERROR;
@@ -609,15 +595,10 @@ static int solve_authority_dnssec(int state, knot_pkt_t *pkt, struct query_data 
 	}
 }
 
-static int solve_additional_kind(int state, knot_pkt_t *pkt, struct query_data *qdata,
-                                 enum additional_kind kind)
+static int solve_additional(int state, knot_pkt_t *pkt, struct query_data *qdata,
+                            void *ctx)
 {
 	int ret = KNOT_EOK;
-
-	/* Only glue can be mandatory. */
-	if (kind == ADDITIONAL_MANDATORY && state != DELEG) {
-		return ret;
-	}
 
 	/* Scan all RRs in ANSWER/AUTHORITY. */
 	for (uint16_t i = 0; i < pkt->rrset_count; ++i) {
@@ -625,29 +606,15 @@ static int solve_additional_kind(int state, knot_pkt_t *pkt, struct query_data *
 		knot_rrinfo_t *info = &pkt->rr_info[i];
 
 		/* Skip types for which it doesn't apply. */
-		if (!knot_rrtype_additional_needed(pkt->rr[i].type)) {
+		if (!knot_rrtype_additional_needed(rr->type)) {
 			continue;
 		}
 
 		/* Put additional records for given type. */
-		ret = put_additional(pkt, rr, qdata, info, state, kind);
+		ret = put_additional(pkt, rr, qdata, info, state);
 		if (ret != KNOT_EOK) {
 			break;
 		}
-	}
-
-	return ret;
-}
-
-static int solve_additional(int state, knot_pkt_t *pkt,
-                            struct query_data *qdata, void *ctx)
-{
-	int ret = KNOT_EOK;
-
-	/* First mandatory, then optional. */
-	ret = solve_additional_kind(state, pkt, qdata, ADDITIONAL_MANDATORY);
-	if (ret == KNOT_EOK) {
-		ret = solve_additional_kind(state, pkt, qdata, ADDITIONAL_OPTIONAL);
 	}
 
 	/* Evaluate final state. */
@@ -688,10 +655,11 @@ int ns_put_rr(knot_pkt_t *pkt, const knot_rrset_t *rr,
 		expand = (knot_dname_is_wildcard(rr->owner) && !knot_dname_is_wildcard(qdata->name));
 	}
 
+	int ret = KNOT_EOK;
+
 	/* If we already have compressed name on the wire and compression hint,
 	 * we can just insert RRSet and fake synthesis by using compression
 	 * hint. */
-	int ret = KNOT_EOK;
 	knot_rrset_t to_add;
 	if (compr_hint == KNOT_COMPR_HINT_NONE && expand) {
 		knot_dname_t *qname_cpy = knot_dname_copy(qdata->name, &pkt->mm);
@@ -699,9 +667,10 @@ int ns_put_rr(knot_pkt_t *pkt, const knot_rrset_t *rr,
 			return KNOT_ENOMEM;
 		}
 		knot_rrset_init(&to_add, qname_cpy, rr->type, rr->rclass);
-		int ret = knot_rdataset_copy(&to_add.rrs, &rr->rrs, &pkt->mm);
+		ret = knot_rdataset_copy(&to_add.rrs, &rr->rrs, &pkt->mm);
 		if (ret != KNOT_EOK) {
 			knot_dname_free(&qname_cpy, &pkt->mm);
+			return ret;
 		}
 		to_add.additional = rr->additional;
 		flags |= KNOT_PF_FREE;

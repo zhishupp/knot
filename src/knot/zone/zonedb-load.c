@@ -230,8 +230,7 @@ static zone_t *create_zone_new(conf_t *conf, const knot_dname_t *name,
 		zone_events_enqueue(zone, ZONE_EVENT_LOAD);
 		break;
 	case ZONE_STATUS_BOOSTRAP:
-		if (zone_events_get_time(zone, ZONE_EVENT_REFRESH) == 0) {
-			// Plan immediate refresh if not already planned.
+		if (zone_events_get_time(zone, ZONE_EVENT_XFER) == 0) {
 			zone_events_schedule(zone, ZONE_EVENT_REFRESH, ZONE_EVENT_NOW);
 		}
 		break;
@@ -275,11 +274,10 @@ static void mark_changed_zones(knot_zonedb_t *zonedb, hattrie_t *changed)
 		return;
 	}
 
-	hattrie_iter_t *it = hattrie_iter_begin(changed, false);
+	hattrie_iter_t *it = hattrie_iter_begin(changed);
 	for (; !hattrie_iter_finished(it); hattrie_iter_next(it)) {
-		size_t len;
 		const knot_dname_t *name =
-			(const knot_dname_t *)hattrie_iter_key(it, &len);
+			(const knot_dname_t *)hattrie_iter_key(it, NULL);
 
 		zone_t *zone = knot_zonedb_find(zonedb, name);
 		if (zone != NULL) {

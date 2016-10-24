@@ -672,7 +672,7 @@ This option is only available in the \fIdefault\fP template.
 \fIDefault:\fP \fI\%storage\fP/timers
 .SS global\-module
 .sp
-An ordered list of references to query modules in the form
+An ordered list of references to query modules in the form of \fImodule_name\fP or
 \fImodule_name/module_id\fP\&. These modules apply to all queries.
 .sp
 \fBNOTE:\fP
@@ -694,8 +694,9 @@ Definition of zones served by the server.
 zone:
   \- domain: DNAME
     template: template_id
-    file: STR
     storage: STR
+    file: STR
+    journal: STR
     master: remote_id ...
     ddns\-master: remote_id
     notify: remote_id ...
@@ -724,6 +725,11 @@ A zone name identifier.
 A \fI\%reference\fP to a configuration template.
 .sp
 \fIDefault:\fP not set or \fIdefault\fP (if the template exists)
+.SS storage
+.sp
+A data directory for storing zone files, journal files and timers database.
+.sp
+\fIDefault:\fP \fB${localstatedir}/lib/knot\fP (configured with \fB\-\-with\-storage=path\fP)
 .SS file
 .sp
 A path to the zone file. Non absolute path is relative to
@@ -733,8 +739,8 @@ A path to the zone file. Non absolute path is relative to
 \fB%c[\fP\fIN\fP\fB]\fP or \fB%c[\fP\fIN\fP\fB\-\fP\fIM\fP\fB]\fP – means the \fIN\fPth
 character or a sequence of characters beginning from the \fIN\fPth and ending
 with the \fIM\fPth character of the textual zone name (see \fB%s\fP). The
-indexes are counted from 0 from the left. If the character is not available,
-the formatter has no effect.
+indexes are counted from 0 from the left. All dots (including the terminal
+one) are considered. If the character is not available, the formatter has no effect.
 .IP \(bu 2
 \fB%l[\fP\fIN\fP\fB]\fP – means the \fIN\fPth label of the textual zone name
 (see \fB%s\fP). The index is counted from 0 from the right (0 ~ TLD).
@@ -749,11 +755,13 @@ terminating dot (the result for the root zone is the empty string!).
 .UNINDENT
 .sp
 \fIDefault:\fP \fI\%storage\fP/\fB%s\fP\&.zone
-.SS storage
+.SS journal
 .sp
-A data directory for storing zone files, journal files and timers database.
+A path to the zone journal. Non absolute path is relative to
+\fI\%storage\fP\&. The same set of formatters as for
+\fI\%file\fP is supported.
 .sp
-\fIDefault:\fP \fB${localstatedir}/lib/knot\fP (configured with \fB\-\-with\-storage=path\fP)
+\fIDefault:\fP \fI\%storage\fP/\fB%s\fP\&.db
 .SS master
 .sp
 An ordered list of \fI\%references\fP to zone master servers.
@@ -938,7 +946,7 @@ done by hand (see RFC 1982).
 \fIDefault:\fP increment
 .SS module
 .sp
-An ordered list of references to query modules in the form
+An ordered list of references to query modules in the form of \fImodule_name\fP or
 \fImodule_name/module_id\fP\&. These modules apply only to the current zone queries.
 .sp
 \fIDefault:\fP not set
@@ -1183,58 +1191,6 @@ A module identifier.
 A path to the directory where the database is stored.
 .sp
 \fIRequired\fP
-.SH MODULE ONLINE-SIGN
-.sp
-The module provides online DNSSEC signing.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-mod\-online\-sign:
-  \- id: STR
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS id
-.sp
-A module identifier.
-.SH MODULE WHOAMI
-.sp
-The module synthesizes an A or AAAA record containing the query source IP address,
-at the apex of the zone being served.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-mod\-whoami:
-  \- id: STR
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS id
-.sp
-A module identifier.
-.SH MODULE NOUDP
-.sp
-The module sends empty truncated response to any UDP query.
-.INDENT 0.0
-.INDENT 3.5
-.sp
-.nf
-.ft C
-mod\-noudp:
-  \- id: STR
-.ft P
-.fi
-.UNINDENT
-.UNINDENT
-.SS id
-.sp
-A module identifier.
 .SH AUTHOR
 CZ.NIC Labs <http://www.knot-dns.cz>
 .SH COPYRIGHT

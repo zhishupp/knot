@@ -25,6 +25,7 @@
 #include <assert.h>
 
 #include "knot/common/log.h"
+#include "contrib/files.h"
 #include "knot/server/journal.h"
 #include "knot/server/serialization.h"
 #include "knot/zone/zone.h"
@@ -104,6 +105,12 @@ static int journal_create_file(const char *fn, uint16_t max_nodes)
 	/* File lock. */
 	struct flock fl = { .l_type = F_WRLCK, .l_whence = SEEK_SET,
 	                    .l_start = 0, .l_len = 0, .l_pid = getpid() };
+
+	/* Create journal file path. */
+	int ret = make_path(fn, S_IRUSR|S_IWUSR|S_IXUSR|S_IRGRP|S_IWGRP|S_IXGRP);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
 
 	/* Create journal file. */
 	int fd = open(fn, O_RDWR|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR|S_IRGRP);
@@ -500,6 +507,8 @@ int journal_open(journal_t **journal, const char *path, size_t fslimit)
 	/* Open journal file. */
 	int ret = journal_open_file(j);
 	if (ret != KNOT_EOK) {
+		log_error("journal '%s', failed to open (%s)", path,
+		          knot_strerror(ret));
 		journal_close(j);
 		return ret;
 	}
@@ -783,7 +792,7 @@ static int serialize_and_store_chgset(const changeset_t *chs,
 	}
 
 	changeset_iter_t itt;
-	ret = changeset_iter_rem(&itt, chs, false);
+	ret = changeset_iter_rem(&itt, chs);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}
@@ -806,7 +815,7 @@ static int serialize_and_store_chgset(const changeset_t *chs,
 	}
 
 	/* Serialize RRSets from the 'add' section. */
-	ret = changeset_iter_add(&itt, chs, false);
+	ret = changeset_iter_add(&itt, chs);
 	if (ret != KNOT_EOK) {
 		return ret;
 	}
