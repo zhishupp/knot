@@ -18,7 +18,6 @@
 
 #include "kasp.h"
 #include "kasp/internal.h"
-#include "keyusage/keyusage.c"
 #include "shared.h"
 
 /* -- internal API --------------------------------------------------------- */

@@ -26,3 +26,7 @@ typedef struct kasp_keyusage {
 typedef struct dnssec_kasp_keyusage {
 	dnssec_list_t *keyrecords;
 } dnssec_kasp_keyusage_t;
+
+int dnssec_keyusage_add(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
+
+int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
