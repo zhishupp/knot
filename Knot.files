@@ -592,3 +592,8 @@ tests/zone_timers.c
 tests/zone_update.c
 tests/zonedb.c
 tests/ztree.c
+src/dnssec/lib/dnssec/keyusage.h
+src/dnssec/lib/keyusage/keyusage.c
+src/dnssec/lib/kasp/dir/keyusage.c
+src/dnssec/lib/kasp/dir/keyusage.h
+src/dnssec/lib/kasp/keyusage.c

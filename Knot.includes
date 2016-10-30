@@ -9,3 +9,6 @@ src/zscanner
 tests
 tests-fuzz
 tests-fuzz/wrap
+src/dnssec/lib/keyusage
+src/dnssec/lib/kasp/dir
+src/dnssec/lib/kasp

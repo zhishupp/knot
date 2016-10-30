@@ -125,6 +125,12 @@ static int keystore_load(void *ctx, dnssec_kasp_keystore_t *keystore)
 	return DNSSEC_EOK;
 }
 
+static int keyusage_load(void *ctx, dnssec_kasp_keyusage_t *keyusage)
+{
+	// add own timer?
+	return dnssec_kasp_dir_api()->keyusage_load(ctx, keyusage);
+}
+
 int kdnssec_kasp(dnssec_kasp_t **kasp, bool legacy)
 {
 	if (legacy) {
@@ -134,7 +140,8 @@ int kdnssec_kasp(dnssec_kasp_t **kasp, bool legacy)
 			.zone_load       = zone_load,
 			.zone_save       = zone_save,
 			.policy_load     = policy_load,
-			.keystore_load   = keystore_load
+			.keystore_load   = keystore_load,
+			.keyusage_load   = keyusage_load,
 		};
 
 		conf_api.init      = dnssec_kasp_dir_api()->init;
@@ -205,6 +212,8 @@ int kdnssec_kasp_init(kdnssec_ctx_t *ctx, const char *kasp_path, const char *zon
 		return r;
 	}
 
+	r = dnssec_kasp_keyusage_load(ctx->kasp, &ctx->keyusage);
+
 	return get_keystore(ctx->kasp, ctx->policy->keystore, &ctx->keystore,
 	                    ctx->legacy);
 }
@@ -219,6 +228,7 @@ void kdnssec_ctx_deinit(kdnssec_ctx_t *ctx)
 	dnssec_kasp_policy_free(ctx->policy);
 	dnssec_kasp_zone_free(ctx->zone);
 	dnssec_kasp_deinit(ctx->kasp);
+	dnssec_kasp_keyusage_free(ctx->keyusage);
 
 	memset(ctx, 0, sizeof(*ctx));
 }

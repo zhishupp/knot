@@ -86,6 +86,7 @@
 #include <dnssec/key.h>
 #include <dnssec/list.h>
 #include <dnssec/nsec.h>
+#include <dnssec/keyusage.h>
 #include <stdbool.h>
 #include <time.h>
 
@@ -420,6 +421,13 @@ int dnssec_kasp_keystore_init(dnssec_kasp_t *kasp, const char *backend,
 int dnssec_kasp_keystore_open(dnssec_kasp_t *kasp, const char *backend,
 			      const char *config, struct dnssec_keystore **store);
 
+dnssec_kasp_keyusage_t *dnssec_kasp_keyusage_new(void);
+void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t *keyusage);
+int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp, dnssec_kasp_keyusage_t **keyusage);
+int dnssec_kasp_keyusage_save(dnssec_kasp_t *kasp, const dnssec_kasp_keyusage_t *keyusage);
+int dnssec_kasp_keyusage_remove(dnssec_kasp_t *kasp);
+int dnssec_kasp_keyusage_exists(dnssec_kasp_t *kasp);
+
 /*!
  * KASP store API implementation.
  */
@@ -448,6 +456,11 @@ typedef struct dnssec_kasp_store_functions {
 	int (*keystore_remove)(void *ctx, const char *name);
 	int (*keystore_list)(void *ctx, dnssec_list_t *names);
 	int (*keystore_exists)(void *ctx, const char *name);
+	// keyusage serialization/deserialization
+	int (*keyusage_load)(void *ctx, dnssec_kasp_keyusage_t *keyusage);
+	int (*keyusage_save)(void *ctx, const dnssec_kasp_keyusage_t *keyusage);
+	int (*keyusage_remove)(void *ctx);
+	int (*keyusage_exists)(void *ctx);
 } dnssec_kasp_store_functions_t;
 
 /*!
