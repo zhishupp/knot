@@ -23,7 +23,9 @@ int dnssec_keyusage_add(dnssec_kasp_keyusage_t *keyusage, const char *keytag, ch
 	dnssec_list_foreach(item, keyusage->keyrecords) {
 		kasp_keyusage_t *record = dnssec_item_get(item);
 		if (strcmp(record->keytag, keytag) == 0) {
-			dnssec_list_append(record->zones, zone);
+			if(!dnssec_list_contains(record->zones, zone)) {
+				dnssec_list_append(record->zones, zone);
+			}
 			return DNSSEC_EOK;
 		}
 	}

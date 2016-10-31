@@ -180,6 +180,7 @@ src/dnssec/tests/event_keystate.c
 src/dnssec/tests/event_nsec3_resalt.c
 src/dnssec/tests/kasp_dir_escape.c
 src/dnssec/tests/kasp_dir_file.c
+src/dnssec/tests/kasp_keyusage.c
 src/dnssec/tests/kasp_policy.c
 src/dnssec/tests/kasp_store.c
 src/dnssec/tests/key.c

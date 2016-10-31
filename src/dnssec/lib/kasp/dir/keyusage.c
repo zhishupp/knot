@@ -28,12 +28,6 @@ static const encode_attr_t KEYTAG_ATTRIBUTES[] = {
 	{ NULL }
 };
 
-static const encode_attr_t ZONES_ATTRIBUTES[] = {
-	#define off(member) offsetof(kasp_keyusage_t, member)
-	{ "zones", off(zones), encode_string, decode_string },
-	{ NULL }
-};
-
 static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
 {
 	dnssec_kasp_keyusage_t *result = dnssec_kasp_keyusage_new();
@@ -53,7 +47,7 @@ static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
 		char *zone;
 		record->zones = dnssec_list_new();
 		json_array_foreach(jzones, b, jzone) {
-			int r = decode_object(KEYTAG_ATTRIBUTES, jzone, &zone);
+			int r = decode_string(jzone, &zone);
 			if (r != DNSSEC_EOK) {
 				return r;
 			}
@@ -96,7 +90,7 @@ static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json
 
 		dnssec_list_foreach(item, record->zones) {
 			const char *zone = dnssec_item_get(item);
-			r = encode_object(ZONES_ATTRIBUTES, &zone, &jzone);
+			r = encode_string(&zone, &jzone);
 			if (r != DNSSEC_EOK) {
 				json_decref(jzone);
 				return r;

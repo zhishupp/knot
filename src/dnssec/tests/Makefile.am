@@ -26,6 +26,7 @@ check_PROGRAMS = \
 	kasp_dir_file	\
 	kasp_policy	\
 	kasp_store	\
+	kasp_keyusage \
 	key		\
 	key_algorithm	\
 	key_ds		\
