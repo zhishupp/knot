@@ -66,11 +66,11 @@ static void test_keyusage_file(void)
 	dnssec_kasp_keyusage_free(k);
 	k = dnssec_kasp_keyusage_new();
 
-	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is used - freed succesfully.");
-	ok(!dnssec_keyusage_is_used(k, "druhy"), "Key is used - freed succesfully.");
+	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is not used - freed succesfully.");
+	ok(!dnssec_keyusage_is_used(k, "druhy"), "Key is not used - freed succesfully.");
 
 	ok(load_keyusage(k, "/tmp/keyusage.json")== DNSSEC_EOK , "kayusage_load");
-
+//todo: why dont they match?
 	ok(dnssec_keyusage_is_used(k, "prvni"), "Key is used - loaded succesfully.");
 	ok(dnssec_keyusage_is_used(k, "druhy"), "Key is used - loaded succesfully.");
 }
