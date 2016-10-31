@@ -30,3 +30,5 @@ typedef struct dnssec_kasp_keyusage {
 int dnssec_keyusage_add(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
 
 int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
+
+bool dnssec_keyusage_is_used(dnssec_kasp_keyusage_t *keyusage, const char *keytag);

@@ -155,6 +155,10 @@ static int exec_new_key(dnssec_event_ctx_t *ctx)
 	new_key->timing.publish = ctx->now;
 	new_key->timing.active = UINT32_MAX;
 
+	ctx->kasp->functions->keyusage_load(ctx->kasp,ctx->keyusage);
+	dnssec_keyusage_add(ctx->keyusage, new_key->id, ctx->zone->name);
+	ctx->kasp->functions->keyusage_save(ctx->kasp,ctx->keyusage);
+
 	return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 }
 
@@ -179,16 +183,22 @@ static int exec_remove_old_key(dnssec_event_ctx_t *ctx)
 		return DNSSEC_EINVAL;
 	}
 
+	ctx->kasp->functions->keyusage_load(ctx->kasp,ctx->keyusage);
+	dnssec_keyusage_remove(ctx->keyusage, retired->id, ctx->zone->name);
+	ctx->kasp->functions->keyusage_save(ctx->kasp,ctx->keyusage);
+	if (dnssec_keyusage_is_used(ctx->keyusage, retired->id)) {
+		return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
+	}
+
 	retired->timing.remove = ctx->now;
 
-    dnssec_keystore_remove_key(ctx->keystore, retired->id);
-    dnssec_list_foreach(item, ctx->zone->keys) {
-        dnssec_kasp_key_t *key = dnssec_item_get(item);
-        if (key->id == retired->id) {
-            dnssec_list_remove(item);
-        }
-    }
-    //TODO: avoid deleting keys used by other zones
+	dnssec_keystore_remove_key(ctx->keystore, retired->id);
+	dnssec_list_foreach(item, ctx->zone->keys) {
+		dnssec_kasp_key_t *key = dnssec_item_get(item);
+		if (key->id == retired->id) {
+			dnssec_list_remove(item);
+		}
+	}
 
 	return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 }

@@ -82,6 +82,7 @@ src/dnssec/lib/dnssec/key.h
 src/dnssec/lib/dnssec/keyid.h
 src/dnssec/lib/dnssec/keystore.h
 src/dnssec/lib/dnssec/keytag.h
+src/dnssec/lib/dnssec/keyusage.h
 src/dnssec/lib/dnssec/list.h
 src/dnssec/lib/dnssec/nsec.h
 src/dnssec/lib/dnssec/random.h
@@ -106,6 +107,8 @@ src/dnssec/lib/kasp/dir/json.c
 src/dnssec/lib/kasp/dir/json.h
 src/dnssec/lib/kasp/dir/keystore.c
 src/dnssec/lib/kasp/dir/keystore.h
+src/dnssec/lib/kasp/dir/keyusage.c
+src/dnssec/lib/kasp/dir/keyusage.h
 src/dnssec/lib/kasp/dir/policy.c
 src/dnssec/lib/kasp/dir/policy.h
 src/dnssec/lib/kasp/dir/zone.c
@@ -114,6 +117,7 @@ src/dnssec/lib/kasp/internal.h
 src/dnssec/lib/kasp/kasp.c
 src/dnssec/lib/kasp/keystore.c
 src/dnssec/lib/kasp/keystore_open.c
+src/dnssec/lib/kasp/keyusage.c
 src/dnssec/lib/kasp/policy.c
 src/dnssec/lib/kasp/zone.c
 src/dnssec/lib/kasp/zone.h
@@ -136,6 +140,7 @@ src/dnssec/lib/keystore/keystore.c
 src/dnssec/lib/keystore/pkcs11.c
 src/dnssec/lib/keystore/pkcs8.c
 src/dnssec/lib/keystore/pkcs8_dir.c
+src/dnssec/lib/keyusage/keyusage.c
 src/dnssec/lib/list/list.c
 src/dnssec/lib/list/ucw_clists.h
 src/dnssec/lib/nsec/bitmap.c
@@ -592,8 +597,3 @@ tests/zone_timers.c
 tests/zone_update.c
 tests/zonedb.c
 tests/ztree.c
-src/dnssec/lib/dnssec/keyusage.h
-src/dnssec/lib/keyusage/keyusage.c
-src/dnssec/lib/kasp/dir/keyusage.c
-src/dnssec/lib/kasp/dir/keyusage.h
-src/dnssec/lib/kasp/keyusage.c

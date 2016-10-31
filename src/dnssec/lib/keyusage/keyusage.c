@@ -52,3 +52,13 @@ int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag,
 	}
 	return DNSSEC_ENOENT;
 }
+
+bool dnssec_keyusage_is_used(dnssec_kasp_keyusage_t *keyusage, const char *keytag) {
+	dnssec_list_foreach(item, keyusage->keyrecords) {
+		kasp_keyusage_t *record = dnssec_item_get(item);
+		if (strcmp(record->keytag, keytag) == 0) {
+			return !dnssec_list_is_empty(record->zones);
+		}
+	}
+	return false;
+}
