@@ -362,7 +362,7 @@ int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp,
 
 	int r = kasp->functions->keyusage_load(kasp->ctx, keyusage);
 	if (r != DNSSEC_EOK) {
-		dnssec_kasp_keyusage_free(keyusage);
+		dnssec_kasp_keyusage_free(&keyusage);
 		return r;
 	}
 

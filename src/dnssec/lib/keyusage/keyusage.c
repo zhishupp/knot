@@ -29,7 +29,7 @@ int dnssec_keyusage_add(dnssec_kasp_keyusage_t *keyusage, const char *keytag, ch
 			return DNSSEC_EOK;
 		}
 	}
-	kasp_keyusage_t *record = malloc(sizeof(record));
+	kasp_keyusage_t *record = malloc(sizeof(*record));
 	record->keytag = strdup(keytag);
 	record->zones = dnssec_list_new();
 	dnssec_list_append(record->zones, zone);
@@ -47,6 +47,9 @@ int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag,
 			}
 			dnssec_list_remove(to_delete);
 			if (dnssec_list_is_empty(record->zones)) {
+				free(record->keytag);
+				dnssec_list_free(record->zones);
+				free(record);
 				dnssec_list_remove(item);
 			}
 			return DNSSEC_EOK;
@@ -56,8 +59,14 @@ int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag,
 }
 
 bool dnssec_keyusage_is_used(dnssec_kasp_keyusage_t *keyusage, const char *keytag) {
+	if (keyusage == NULL || keyusage->keyrecords == NULL) {
+		return false;
+	}
 	dnssec_list_foreach(item, keyusage->keyrecords) {
 		kasp_keyusage_t *record = dnssec_item_get(item);
+		if(record == NULL || record->keytag == NULL) {
+			return false;
+		}
 		if (strcmp(record->keytag, keytag) == 0) {
 			return !dnssec_list_is_empty(record->zones);
 		}

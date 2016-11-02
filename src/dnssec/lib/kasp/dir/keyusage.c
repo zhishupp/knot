@@ -25,40 +25,46 @@
 
 static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
 {
-	dnssec_kasp_keyusage_t *result = dnssec_kasp_keyusage_new();
+	if (keyusage == NULL) {
+		keyusage = dnssec_kasp_keyusage_new();
+	} else {
+		dnssec_list_clear(keyusage->keyrecords);
+	}
+
 	json_t *jrecord = NULL;
 	int a, b;
-	kasp_keyusage_t *record = malloc(sizeof(record));
-	if (record == NULL) {
-		return DNSSEC_ENOMEM;
-	}
+
 	json_array_foreach(json, a, jrecord) {
 		json_t *jkeytag = NULL;
 		jkeytag = json_object_get(jrecord, "keytag");
-		char keytag[18];
-		int r = decode_string(jkeytag, keytag);
+
+
+
+		kasp_keyusage_t *record = malloc(sizeof(*record));
+		if (record == NULL) {
+			return DNSSEC_ENOMEM;
+		}
+
+		int r = decode_string(jkeytag, &record->keytag);
 		if (r != DNSSEC_EOK) {
 			return r;
 		}
-		record->keytag = strdup(keytag);
 
 		json_t *jzones = NULL, *jzone = NULL;
 		jzones = json_object_get(jrecord, "zones");
-		char zone[256];
 		record->zones = dnssec_list_new();
+
 		json_array_foreach(jzones, b, jzone) {
-			int r = decode_string(jzone, zone);
+			char *zone;
+			int r = decode_string(jzone, &zone);
 			if (r != DNSSEC_EOK) {
 				return r;
 			}
 			dnssec_list_append(record->zones, zone);
+			free(zone);
 		}
-		dnssec_list_append(result->keyrecords, record);
-		free(record->keytag);
+		dnssec_list_append(keyusage->keyrecords, record);
 	}
-
-	dnssec_kasp_keyusage_free(keyusage);
-	keyusage = result;
 
 	return DNSSEC_EOK;
 }
@@ -67,26 +73,31 @@ static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json
 {
 	assert(keyusage);
 	assert(json);
+	kasp_keyusage_t *record;
+	int r;
 
 	json_t *jrecords = json_array();
 	if (!jrecords) {
 		return DNSSEC_ENOMEM;
 	}
 
+	json_t *jkeytag = NULL;
+	json_t *jzone = NULL;
+	json_t *jzones = NULL;
+
 	dnssec_list_foreach(item, keyusage->keyrecords) {
-		kasp_keyusage_t *record = dnssec_item_get(item);
+		record = dnssec_item_get(item);
 
 		json_t *jzones = json_array();
 		if (!jzones) {
+			json_array_clear(jrecords);
 			return DNSSEC_ENOMEM;
 		}
-		json_t *jkeytag = NULL;
-		json_t *jzone = NULL;
 
-		int r = encode_string(&record->keytag, &jkeytag);
+		r = encode_string(&record->keytag, &jkeytag);
 		if (r != DNSSEC_EOK) {
 			json_decref(jkeytag);
-			return r;
+			goto error;
 		}
 
 		dnssec_list_foreach(item, record->zones) {
@@ -94,41 +105,47 @@ static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json
 			r = encode_string(&zone, &jzone);
 			if (r != DNSSEC_EOK) {
 				json_decref(jzone);
-				return r;
+				goto error;
 			}
 			if (json_array_append_new(jzones, jzone)) {
-				json_decref(jzone);
-				json_decref(jzones);
-				return DNSSEC_ENOMEM;
+				r = DNSSEC_ENOMEM;
+				goto error;
 			}
 		}
 		json_t *jrecord = json_object();
 		if (!jrecord) {
-			return DNSSEC_ENOMEM;
+			r = DNSSEC_ENOMEM;
+			goto error;
 		}
 
 		if (json_object_set(jrecord, "keytag",jkeytag)) {
-			json_decref(jrecord);
-			json_decref(jkeytag);
-			return DNSSEC_ENOMEM;
+			json_object_clear(jrecord);
+			r = DNSSEC_ENOMEM;
+			goto error;
 		}
+		json_decref(jkeytag);
 
 		if (json_object_set(jrecord, "zones",jzones)) {
-			json_decref(jrecord);
-			json_decref(jzones);
-			return DNSSEC_ENOMEM;
+			json_object_clear(jrecord);
+			r = DNSSEC_ENOMEM;
+			goto error;
 		}
+		json_decref(jzones);
 
 		if (json_array_append_new(jrecords, jrecord)) {
-			json_decref(jrecords);
-			json_decref(jrecord);
-			return DNSSEC_ENOMEM;
+			json_object_clear(jrecord);
+			r = DNSSEC_ENOMEM;
+			goto error;
 		}
 	}
-
 	*json = jrecords;
 
 	return DNSSEC_EOK;
+error:
+	json_array_clear(jzones);
+	json_array_clear(jrecords);
+	return r;
+
 }
 
 int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename)

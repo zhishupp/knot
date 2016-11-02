@@ -228,7 +228,7 @@ void kdnssec_ctx_deinit(kdnssec_ctx_t *ctx)
 	dnssec_kasp_policy_free(ctx->policy);
 	dnssec_kasp_zone_free(ctx->zone);
 	dnssec_kasp_deinit(ctx->kasp);
-	dnssec_kasp_keyusage_free(ctx->keyusage);
+	dnssec_kasp_keyusage_free(&ctx->keyusage);
 
 	memset(ctx, 0, sizeof(*ctx));
 }

@@ -16,6 +16,7 @@
 
 #include <tap/basic.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "kasp/dir/keyusage.h"
 #include "dnssec/error.h"
@@ -31,8 +32,8 @@ static void test_keyusage_basic(void)
 	k = dnssec_kasp_keyusage_new();
 	ok(dnssec_list_is_empty(k->keyrecords), "List of records is empty.");
 
-	dnssec_keyusage_add(k, "prv"
-			       "ni", "zona");
+	dnssec_keyusage_add(k, "prvni", "zona");
+
 	ok(!dnssec_list_is_empty(k->keyrecords), "List of records is not empty.");
 	// Check added key being used
 	ok(dnssec_keyusage_is_used(k, "prvni"), "Key is used.");
@@ -46,11 +47,12 @@ static void test_keyusage_basic(void)
 	dnssec_keyusage_add(k, "prvni", "zona2");
 	dnssec_keyusage_remove(k, "prvni", "zona");
 	ok(dnssec_keyusage_is_used(k, "prvni"), "Key is used.");
+
 	// Check if key is unused after deleting both zones
 	dnssec_keyusage_remove(k, "prvni", "zona2");
-	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is unused.");
+	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is not used.");
 
-	dnssec_kasp_keyusage_free(k);
+	dnssec_kasp_keyusage_free(&k);
 }
 
 static void test_keyusage_file(void)
@@ -63,16 +65,18 @@ static void test_keyusage_file(void)
 
 	ok(save_keyusage(k, "/tmp/keyusage.json") == DNSSEC_EOK , "kayusage_save");
 
-	dnssec_kasp_keyusage_free(k);
+	dnssec_kasp_keyusage_free(&k);
 	k = dnssec_kasp_keyusage_new();
 
 	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is not used - freed succesfully.");
 	ok(!dnssec_keyusage_is_used(k, "druhy"), "Key is not used - freed succesfully.");
 
 	ok(load_keyusage(k, "/tmp/keyusage.json")== DNSSEC_EOK , "kayusage_load");
-//todo: why dont they match?
+
 	ok(dnssec_keyusage_is_used(k, "prvni"), "Key is used - loaded succesfully.");
 	ok(dnssec_keyusage_is_used(k, "druhy"), "Key is used - loaded succesfully.");
+
+	dnssec_kasp_keyusage_free(&k);
 }
 
 int main(int argc, char *argv[])

@@ -25,18 +25,20 @@
 //todo
 void keyusage_cleanup(dnssec_kasp_keyusage_t *keyusage)
 {
-	if (!keyusage) {
+	if (keyusage == NULL || keyusage->keyrecords == NULL) {
 		return;
 	}
 
-	dnssec_list_foreach(item, keyusage->keyrecords) {
-		kasp_keyusage_t *record = dnssec_item_get(item);
+	if (!dnssec_list_is_empty(keyusage->keyrecords)) {
+		dnssec_list_foreach(item, keyusage->keyrecords) {
+			kasp_keyusage_t *record = dnssec_item_get(item);
 
-		free(record->keytag);
-		dnssec_list_free(record->zones);
+			free(record->keytag);
+			dnssec_list_free(record->zones);
+			free(record);
+		}
 	}
 	dnssec_list_free(keyusage->keyrecords);
-	clear_struct(keyusage);
 }
 
 /* -- public API ----------------------------------------------------------- */
@@ -44,22 +46,21 @@ void keyusage_cleanup(dnssec_kasp_keyusage_t *keyusage)
 _public_
 dnssec_kasp_keyusage_t *dnssec_kasp_keyusage_new()
 {
-	dnssec_kasp_keyusage_t *keyusage = malloc(sizeof(*keyusage));
+	dnssec_kasp_keyusage_t *keyusage = malloc(sizeof(keyusage));
 	clear_struct(keyusage);
-
 	keyusage->keyrecords = dnssec_list_new();
 
 	return keyusage;
 }
 
 _public_
-void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t *keyusage)
+void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t **keyusage)
 {
-	if (!keyusage) {
+	if (*keyusage == NULL) {
 		return;
 	}
 
-	keyusage_cleanup(keyusage);
-
-	free(keyusage);
+	keyusage_cleanup(*keyusage);
+	free(*keyusage);
+	*keyusage = NULL;
 }
