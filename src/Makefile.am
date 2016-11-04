@@ -274,6 +274,10 @@ libknotd_la_SOURCES =				\
 	knot/events/handlers/update.c		\
 	knot/events/replan.c			\
 	knot/events/replan.h			\
+	knot/journal/journal.c			\
+	knot/journal/journal.h			\
+	knot/journal/serialization.c		\
+	knot/journal/serialization.h		\
 	knot/modules/dnsproxy.c			\
 	knot/modules/dnsproxy.h			\
 	knot/modules/noudp.c			\
@@ -327,12 +331,8 @@ libknotd_la_SOURCES =				\
 	knot/common/ref.h			\
 	knot/server/dthreads.c			\
 	knot/server/dthreads.h			\
-	knot/server/journal.c			\
-	knot/server/journal.h			\
 	knot/server/rrl.c			\
 	knot/server/rrl.h			\
-	knot/server/serialization.c		\
-	knot/server/serialization.h		\
 	knot/server/server.c			\
 	knot/server/server.h			\
 	knot/server/tcp-handler.c		\

@@ -59,6 +59,53 @@ int rrset_serialize(const knot_rrset_t *rrset, uint8_t *stream, size_t *size);
  * \return KNOT_E*
  */
 int rrset_deserialize(const uint8_t *stream, size_t *stream_size,
-                      knot_rrset_t *rrset);
+		      knot_rrset_t *rrset);
+
+/*!
+ * \brief Returns size of changeset in serialized form.
+ *
+ * \param[in] ch  Changeset whose size we want to compute.
+ *
+ * \return Size of the changeset.
+ */
+size_t changeset_serialized_size(const changeset_t *ch);
+
+/*!
+ * \brief Serializes one changeset into byte stream.
+ *
+ * \param[in]  ch    Changeset to serialize.
+ * \param[out] dst   Output stream.
+ * \param[in]  size  Output stream size.
+ *
+ * \return KNOT_E*
+ */
+int changeset_serialize(const changeset_t *ch, uint8_t *dst, size_t size);
+
+/*!
+ * \brief Deserializes one changeset from byte stream.
+ *
+ * \param[out] ch   Changeset to deserialize.
+ * \param[in] src   Input stream.
+ * \param[in] size  Input stream size.
+ *
+ * \return KNOT_E*
+ */
+int changeset_deserialize(changeset_t *ch, const uint8_t *src, size_t size);
+
+/*!
+ * \brief Serializes given changeset into chunked area.
+ *
+ * \param ch The changeset; dst_chunks The chunks to serialize into; chunk_size Maximum size of each chunk; chunks_count Maximum number of used chunks
+ * \param chunks_real_sizes Output: real size of each chunk after serialization, or zeros for unused chunks
+ * \param chunks_real_count Output: real # of chunks after serialization. Can be wrong if error returned!
+ *
+ * \retval KNOT_E*
+ */
+int changeset_serialize_chunks(const changeset_t *ch, uint8_t *dst_chunks[], size_t chunk_size, int chunks_count, size_t * chunks_real_sizes, int * chunks_real_count);
+
+/*!
+ * \brief Deserializes chunked area into ch
+ */
+int changeset_deserialize_chunks(changeset_t *ch, uint8_t *src_chunks[], const size_t * chunks_sizes, int chunks_count);
 
 /*! @} */
