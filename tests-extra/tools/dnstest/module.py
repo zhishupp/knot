@@ -181,3 +181,13 @@ class ModRosedb(KnotModule):
             set_err("ROSEDB_TOOL")
             detail_log("!Failed to add a record into rosedb '%s'" % self.dbdir)
             detail_log(SEP)
+
+class ModStats(KnotModule):
+    '''Stats module'''
+
+    src_name = "stats_load"
+    conf_name = "mod-stats"
+    empty = True
+
+    def __init__(self):
+        super().__init__()
