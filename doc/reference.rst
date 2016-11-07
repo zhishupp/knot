@@ -506,6 +506,49 @@ Maximum time the control socket operations can take. Set 0 for infinity.
 
 *Default:* 5
 
+.. _statistics_section:
+
+Statistics section
+==================
+
+Periodic server statistics  dumping.
+
+::
+
+  statistics:
+      timer: TIME
+      file: STR
+      append: BOOL
+
+.. _statistics_timer:
+
+timer
+-----
+
+A period after which all available statistics metrics will by written to the
+:ref:`file<statistics_file>`.
+
+*Default:* not set
+
+.. _statistics_file:
+
+file
+----
+
+A file path of statistics output in the YAML format.
+
+*Default:* :ref:`rundir<server_rundir>`/stats.yaml
+
+.. _statistics_append:
+
+append
+------
+
+If enabled, the output will be appended to the :ref:`file<statistics_file>`
+instead of file replacement.
+
+*Default:* off
+
 .. _Keystore section:
 
 Keystore section
@@ -1464,3 +1507,119 @@ dbdir
 A path to the directory where the database is stored.
 
 *Required*
+
+Module stats
+============
+
+The module provides incoming query processing statistics.
+
+::
+
+ mod-stats:
+   - id: STR
+     request-protocol: BOOL
+     server-operation: BOOL
+     request-bytes: BOOL
+     response-bytes: BOOL
+     edns-presence: BOOL
+     flag-presence: BOOL
+     response-code: BOOL
+     reply-nodata: BOOL
+     query-type: BOOL
+     query-size: BOOL
+     reply-size: BOOL
+
+.. _mod-stats_id:
+
+id
+--
+
+A module identifier.
+
+.. _mod-stats_request-protocol:
+
+request-protocol
+----------------
+
+
+*Default:* on
+
+.. _mod-stats_server-operation:
+
+server-operation
+----------------
+
+
+*Default:* on
+
+.. _mod-stats_request-bytes:
+
+request-bytes
+-------------
+
+
+*Default:* on
+
+.. _mod-stats_response-bytes:
+
+response-bytes
+--------------
+
+
+*Default:* on
+
+.. _mod-stats_edns-presence:
+
+edns-presence
+-------------
+
+
+*Default:* off
+
+.. _mod-stats_flag-presence:
+
+flag-presence
+-------------
+
+
+*Default:* off
+
+.. _mod-stats_response-code:
+
+response-code
+-------------
+
+
+*Default:* on
+
+.. _mod-stats_reply-nodata:
+
+reply-nodata
+------------
+
+
+*Default:* off
+
+.. _mod-stats_query-type:
+
+query-type
+----------
+
+
+*Default:* off
+
+.. _mod-stats_query-size:
+
+query-size
+----------
+
+
+*Default:* off
+
+.. _mod-stats_reply-size:
+
+reply-size
+----------
+
+
+*Default:* off
