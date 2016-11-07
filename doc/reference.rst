@@ -506,6 +506,49 @@ Maximum time the control socket operations can take. Set 0 for infinity.
 
 *Default:* 5
 
+.. _statistics_section:
+
+Statistics section
+==================
+
+Periodic server statistics  dumping.
+
+::
+
+  statistics:
+      timer: TIME
+      file: STR
+      append: BOOL
+
+.. _statistics_timer:
+
+timer
+-----
+
+A period after which all available statistics metrics will by written to the
+:ref:`file<statistics_file>`.
+
+*Default:* not set
+
+.. _statistics_file:
+
+file
+----
+
+A file path of statistics output in the YAML format.
+
+*Default:* :ref:`rundir<server_rundir>`/stats.yaml
+
+.. _statistics_append:
+
+append
+------
+
+If enabled, the output will be appended to the :ref:`file<statistics_file>`
+instead of file replacement.
+
+*Default:* off
+
 .. _Keystore section:
 
 Keystore section

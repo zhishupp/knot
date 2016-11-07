@@ -440,6 +440,39 @@ A UNIX socket path where the server listens for control commands.
 Maximum time the control socket operations can take. Set 0 for infinity.
 .sp
 \fIDefault:\fP 5
+.SH STATISTICS SECTION
+.sp
+Periodic server statistics  dumping.
+.INDENT 0.0
+.INDENT 3.5
+.sp
+.nf
+.ft C
+statistics:
+    timer: TIME
+    file: STR
+    append: BOOL
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SS timer
+.sp
+A period after which all available statistics metrics will by written to the
+\fI\%file\fP\&.
+.sp
+\fIDefault:\fP not set
+.SS file
+.sp
+A file path of statistics output in the YAML format.
+.sp
+\fIDefault:\fP \fI\%rundir\fP/stats.yaml
+.SS append
+.sp
+If enabled, the output will be appended to the \fI\%file\fP
+instead of file replacement.
+.sp
+\fIDefault:\fP off
 .SH KEYSTORE SECTION
 .sp
 DNSSEC keystore configuration.
