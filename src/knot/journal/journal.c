@@ -56,6 +56,7 @@ const uint32_t JOURNAL_VERSION = 10;
 #define DB_KEEP_MERGED 0.33f
 #define DB_KEEP_FORMERGE 0.67f
 #define DB_DISPOSE_RATIO 3
+#define DB_MAX_INSERT_TXN 0.05f
 
 enum {
 	LAST_FLUSHED_VALID = 1 << 0, /* "last flush is valid" flag. */
@@ -1001,6 +1002,7 @@ static int insert_one_changeset(journal_t * j, knot_db_t * db, const changeset_t
 	size_t chsize = changeset_serialized_size(ch);
 	uint32_t serial = knot_soa_serial(&ch->soa_from->rrs);
 	uint32_t serial_to = knot_soa_serial(&ch->soa_to->rrs);
+	size_t inserted_size = 0;
 
 	int restarted = -1;
 	uint8_t * allchunks = NULL;
@@ -1090,7 +1092,10 @@ static int insert_one_changeset(journal_t * j, knot_db_t * db, const changeset_t
 	for (int i = 0; i < chunks; i++) {
 		make_key2(serial, i, &key);
 		txn_insert(txn, &key, vals+i, 0);
-		if (txn->ret == KNOT_ELIMIT) { // txn full, commit and start over
+		inserted_size += (vals+i)->len;
+		if (txn->ret == KNOT_ELIMIT || // txn full, commit and start over
+		    (float) inserted_size > DB_MAX_INSERT_TXN * (float) j->fslimit) { // insert txn too large
+			inserted_size = 0;
 			restarted = i;
 			txn->ret = KNOT_EOK;
 			txn_commit(txn);
@@ -1128,6 +1133,7 @@ static int insert_one_changeset(journal_t * j, knot_db_t * db, const changeset_t
 			i_o_ch_txn_check
 		}
 		txn_commit(txn);
+		// TODO: if the server crashes between PART 6 and PART 8, there may remain rubbish in the DB. Please think of a way to clean it occasionally.
 		i_o_ch_txn_check
 	}
 
