@@ -346,6 +346,22 @@ int zone_flush_journal(conf_t *conf, zone_t *zone)
 	return ret;
 }
 
+int zone_check_journal(conf_t * conf, zone_t * zone, int warn_level)
+{
+	int ret;
+
+	char *journal_file = conf_journalfile(conf, zone->name);
+	if (!journal_exists(journal_file)) return KNOT_EEXIST;
+
+	ret = open_journal(conf, zone);
+	if (ret != KNOT_EOK) return ret;
+
+	ret = journal_check(zone->journal, warn_level);
+
+	close_journal(zone);
+	return ret;
+}
+
 zone_contents_t *zone_switch_contents(zone_t *zone, zone_contents_t *new_contents)
 {
 	if (zone == NULL) {

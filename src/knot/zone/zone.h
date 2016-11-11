@@ -130,6 +130,9 @@ int zone_changes_load(conf_t *conf, zone_t *zone, list_t *dst, uint32_t from);
 
 /*! \brief Synchronize zone file with journal. */
 int zone_flush_journal(conf_t *conf, zone_t *zone);
+
+int zone_check_journal(conf_t * conf, zone_t * zone, int warn_level);
+
 /*!
  * \brief Atomically switch the content of the zone.
  */
