@@ -489,6 +489,51 @@ static int store_metadata(journal_t *j)
 	return KNOT_EOK;
 }
 
+int journal_load_zone_name(journal_t * j, const knot_dname_t ** zname)
+{
+        if (j == NULL) return KNOT_EINVAL;
+
+        local_txn_ctx(txn, j);
+        txn_beg_jdb(txn, meta_db, KNOT_DB_RDONLY);
+
+        knot_db_val_t key, val;
+        key.len = strlen("zone_name") + 1;
+        key.data = (void *) "zone_name";
+        txn_find_force(txn, &key, &val, 0);
+        txn_check_ret(txn);
+
+        if (knot_dname_cmp(val.data, j->zone_name) == 0) {
+                txn_abort(txn);
+                *zname = j->zone_name;
+                return KNOT_EOK;
+        }
+
+        *zname = knot_dname_copy(val.data, NULL); // val.data was stored with ending '\0'
+        txn_abort(txn);
+        if (*zname == NULL) return KNOT_ENOMEM;
+
+        j->zone_name = *zname;
+        return KNOT_ESEMCHECK;
+}
+
+void journal_metadata_info(journal_t * j, int * is_empty, uint32_t * serial_from, uint32_t * serial_to)
+{
+        // NOTE: there is NEVER the situation that only merged changeset would be present and no common changeset in db.
+
+        if (j == NULL || !(j->metadata.flags & SERIAL_TO_VALID)) {
+                *is_empty = 1;
+                return;
+        }
+
+        *is_empty = 0;
+        *serial_from = j->metadata.first_serial;
+        *serial_to = j->metadata.last_serial_to;
+
+        if ((j->metadata.flags & MERGED_SERIAL_VALID)) {
+                *serial_from = j->metadata.merged_serial;
+        }
+}
+
 /*
  * ***************************** PART IV ******************************
  *

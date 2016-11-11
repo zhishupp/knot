@@ -131,6 +131,26 @@ bool journal_exists(const char *path);
  */
 int journal_flush(journal_t *journal);
 
+/*! \brief Extract the zone name from journal metadata.
+ *
+ * \param j Journal
+ * \param zname Output: the zone name if OK or ESEMCHECK.
+ *
+ * \retval KNOT_ESEMCHECK if the extracted *zname != j->zone_name (j->zone_name is modified in this case to correspond)
+ * \retval KNOT_EOK if the extracted *zname == j->zone_name
+ * \return < KNOT_EOK on other error.
+ */
+int journal_load_zone_name(journal_t * j, const knot_dname_t **zname);
+
+/*! \brief Obtain public information from journal metadata
+ *
+ * \param j Journal
+ * \param is_empty Out: 1 if j contains no changesets
+ * \param serial_from Out if !is_empty: starting serial of changesets history
+ * \param serial_to Out if !is_empty: ending serial of changesets history
+ */
+void journal_metadata_info(journal_t * j, int * is_empty, uint32_t * serial_from, uint32_t * serial_to);
+
 enum {
 	KNOT_JOURNAL_CHECK_SILENT = 0,
 	KNOT_JOURNAL_CHECK_WARN = 1,
