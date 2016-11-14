@@ -20,6 +20,16 @@
 #include "knot/zone/zone.h"
 #include "knot/zone/zonedb.h"
 
+#define PERSISTENT_EVENT_COUNT 4
+
+/*!
+ * \brief Return event ID.
+ *
+ * \param[in]  key      Persistant event key.
+ *
+ */
+int persistent_event_key_to_event_id(int key);
+
 /*!
  * \brief Opens zone timers db.
  *

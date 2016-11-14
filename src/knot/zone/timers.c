@@ -19,8 +19,6 @@
 #include "contrib/wire.h"
 #include "contrib/wire_ctx.h"
 
-#define PERSISTENT_EVENT_COUNT 4
-
 enum {
 	KEY_REFRESH = 1,
 	KEY_EXPIRE,
@@ -42,6 +40,16 @@ static const int key_to_event_id[PERSISTENT_EVENT_COUNT + 1] = {
 	[KEY_FLUSH] = ZONE_EVENT_FLUSH,
 	[KEY_XFER] = ZONE_EVENT_XFER
 };
+
+int persistent_event_key_to_event_id(int key)
+{
+	if (key < 1 || key > PERSISTENT_EVENT_COUNT) {
+		return -1;
+	}
+	else {
+		return key_to_event_id[key];
+	}
+}
 
 static bool known_event_key(uint8_t key)
 {

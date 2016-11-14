@@ -205,10 +205,65 @@ static int zone_status(zone_t *zone, ctl_args_t *args)
 		return ret;
 	}
 
+	//Timers
+	data[KNOT_CTL_IDX_TYPE] = "timers";
+
+	conf_val_t val = conf_default_get(conf(), C_STORAGE);
+	char *storage = conf_abs_path(&val, NULL);
+	val = conf_default_get(conf(), C_TIMER_DB);
+	char *path = conf_abs_path(&val, storage);
+	free(storage);
+
+	knot_db_t *timer_db = NULL;
+	ret = open_timers_db(path, &timer_db);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+
+	char buffer[512];
+	time_t *timers;
+	
+	timers = (time_t*) malloc(ZONE_EVENT_COUNT);
+	ret = read_zone_timers(timer_db, zone, timers);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}	
+
+	const char *event_name;
+	int id;
+	int bufflen = 0;
+
+	for (int i = 1; i <= PERSISTENT_EVENT_COUNT; i++) {
+		id = persistent_event_key_to_event_id(i);
+		event_name = zone_events_get_name(id);
+		ret = snprintf(buffer + bufflen, sizeof(buffer) - bufflen, "%s: %lld", event_name, (long long) timers[id]);
+		bufflen += ret;
+		if (bufflen < 0 || bufflen >= sizeof(buffer)) {
+			return KNOT_ESPACE;
+		}
+		
+		if (i < PERSISTENT_EVENT_COUNT) {
+			ret = snprintf(buffer + bufflen, sizeof(buffer) - bufflen, "; ");
+			bufflen += ret;
+			if (bufflen < 0 || bufflen >= sizeof(buffer)) {
+				return KNOT_ESPACE;
+			}
+		}
+	}
+		
+	data[KNOT_CTL_IDX_DATA] = buffer;
+
+	close_timers_db(timer_db);
+	
+	ret = knot_ctl_send(args->ctl, KNOT_CTL_TYPE_EXTRA, &data);
+	if (ret != KNOT_EOK) {
+		return ret;
+	}
+				   
 	// DNSSEC re-signing time.
 	data[KNOT_CTL_IDX_TYPE] = "auto-dnssec";
 
-	conf_val_t val = conf_zone_get(conf(), C_DNSSEC_SIGNING, zone->name);
+	val = conf_zone_get(conf(), C_DNSSEC_SIGNING, zone->name);
 	if (conf_bool(&val)) {
 		struct tm time_gm = { 0 };
 		time_t refresh_at = zone_events_get_time(zone, ZONE_EVENT_DNSSEC);
