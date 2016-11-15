@@ -898,6 +898,22 @@ This option has no effect with enabled
 .sp
 Maximum size of the zone journal file.
 .sp
+\fBNOTE:\fP
+.INDENT 0.0
+.INDENT 3.5
+When the journal DB becomes full, it flushes the changes into
+\fI\%zone file\fP, and lazily deletes oldest changes (some of the
+flushed ones remain present for potential IXFR requests).
+.sp
+Furthermore, if flushing is disabled (\fBzonefile\-sync\fP equals \-1), the journal
+merges some of the old changes to keep continuous history between zone file
+and current zone contents, while saving DB space (this is effective if the
+changes overlap often).
+.sp
+If all the attempts to make space in the DB fail, journal starts refusing new changes.
+.UNINDENT
+.UNINDENT
+.sp
 \fIDefault:\fP 2^64
 .SS max\-zone\-size
 .sp

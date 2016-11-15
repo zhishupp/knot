@@ -1048,6 +1048,18 @@ max-journal-size
 
 Maximum size of the zone journal file.
 
+.. NOTE::
+   When the journal DB becomes full, it flushes the changes into 
+   :ref:`zone file<zone_file>`, and lazily deletes oldest changes (some of the
+   flushed ones remain present for potential IXFR requests).
+
+   Furthermore, if flushing is disabled (``zonefile-sync`` equals -1), the journal
+   merges some of the old changes to keep continuous history between zone file 
+   and current zone contents, while saving DB space (this is effective if the 
+   changes overlap often).
+
+   If all the attempts to make space in the DB fail, journal starts refusing new changes.
+
 *Default:* 2^64
 
 .. _zone_max_zone_size:
