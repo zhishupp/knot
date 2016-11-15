@@ -912,6 +912,7 @@ static int delete_upto(journal_t * j, knot_db_t * db, uint32_t dbfirst, uint32_t
 	int ret = iterate(j, db, del_upto_itercb, &ctx, dbfirst, last, 0);
 	if (ret != KNOT_EOK) return ret;
 	if (db == j->db) copy_metadata(&j->metadata, &dfctx.shadow);
+	store_metadata(j);
 	return KNOT_EOK;
 }
 
@@ -920,6 +921,7 @@ static int delete_merged_changeset(journal_t * j)
 	if (!(j->metadata.flags & MERGED_SERIAL_VALID)) return KNOT_ENOENT;
 	int ret = delete_upto(j, j->merged_db, j->metadata.merged_serial, j->metadata.merged_serial);
 	if (ret == KNOT_EOK) j->metadata.flags &= ~MERGED_SERIAL_VALID;
+	store_metadata(j);
 	return ret;
 }
 
@@ -975,6 +977,7 @@ static int delete_tofree(journal_t * j, size_t to_be_freed, size_t * really_free
 	*really_freed = dfctx.freed_approx;
 	if (ret != KNOT_EOK) return ret;
 	copy_metadata(&j->metadata, &dfctx.shadow);
+	store_metadata(j);
 	return KNOT_EOK;
 }
 
@@ -1120,6 +1123,7 @@ static int insert_one_changeset(journal_t * j, knot_db_t * db, const changeset_t
 		j->metadata.flags |= MERGED_SERIAL_VALID;
 		j->metadata.merged_serial = serial;
 	}
+	store_metadata(j);
 
 	// PART 8: cleanup
 	i_o_ch_free:
@@ -1231,6 +1235,9 @@ static int merge_journal(journal_t * j)
 
 	if ((j->metadata.flags & MERGED_SERIAL_VALID)) {
 		ret = load_merged_changeset(j, &mch);
+		if (ret == KNOT_EOK && serial_compare(from, knot_soa_serial(&mch->soa_to->rrs)) != 0) {
+			ret = KNOT_ERROR;
+		}
 	}
 	else { // this is the very first merge. we take the first unmerged changeset as a base and merge the rest to it.
 		j->metadata.merged_serial = from;
@@ -1369,6 +1376,7 @@ int journal_open(journal_t *j, const char *path, size_t fslimit, const knot_dnam
 	}
 #undef NOK_FREE
 
+	// return journal_check(j, KNOT_JOURNAL_CHECK_SILENT); // would be nice, but too slow
 	return KNOT_EOK;
 }
 
