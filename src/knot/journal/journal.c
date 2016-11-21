@@ -565,40 +565,6 @@ typedef struct {
 	int flags;      // txn flags (0 or KNOT_DB_RDONLY)
 } iteration_db_spec;
 
-/*! \brief Call with full txn to restart it while keeping iterator. */
-static int refresh_txn_iter(txn_ctx_t * t, iteration_ctx_t * ictx, const iteration_db_spec * spec, uint32_t * last_refreshed)
-{
-	assert(t->j == ictx->txn->j);
-
-	t->j->db_api->iter_finish(ictx->iter);
-	txn_commit(t);
-	txn_check_ret(t);
-
-	if (ictx->method == JOURNAL_ITERATION_CHANGESETS) {
-		if (*last_refreshed == ictx->serial) return KNOT_ELIMIT; // trying to refresh cyclically the same changeset which cannot be read at once
-		*last_refreshed = ictx->serial;
-		ictx->chunk_index = 0; // restart at the beginning of current changeset
-	}
-
-	txn_beg_db(t, spec->db, spec->flags); // really NOOP? or 0 now ?, not spec->flags
-	txn_check_ret(t);
-
-	knot_db_iter_t *it = t->j->db_api->iter_begin(t->txn, KNOT_DB_NOOP);
-	if (it == NULL) {
-		return KNOT_ERROR;
-	}
-
-	knot_db_val_t key;
-	make_key2(ictx->serial, ictx->chunk_index, &key);
-	it = t->j->db_api->iter_seek(it, &key, 0);
-	if (it == NULL) {
-		return KNOT_ENOENT;
-	}
-
-	ictx->iter = it;
-	return KNOT_EOK;
-}
-
 /*!
  * \brief Move iter to next changeset chunk.
  *
@@ -710,22 +676,12 @@ static int iterate_txn(txn_ctx_t * txn, iteration_cb_t cb, iteration_ctx_t *ctx,
 
 		if (ctx->method == JOURNAL_ITERATION_CHUNKS) {
 			ret = cb(ctx);
-			if (ret == KNOT_ELIMIT) {
-				ret = refresh_txn_iter(txn, ctx, spec, NULL);
-				check_ret_iter(KNOT_ERROR);
-				ret = cb(ctx);
-			}
 			check_ret_iter(KNOT_ERROR);
 		}
 
 		if (ctx->chunk_index == ctx->chunk_count - 1) { // hit last chunk of current changeset
 			if (ctx->method == JOURNAL_ITERATION_CHANGESETS) {
 				ret = cb(ctx);
-				if (ret == KNOT_ELIMIT) {
-					ret = refresh_txn_iter(txn, ctx, spec, &last_refreshed);
-					check_ret_iter(KNOT_ERROR);
-					continue;
-				}
 				check_ret_iter(KNOT_ERROR);
 			}
 
@@ -1096,8 +1052,7 @@ static int insert_one_changeset(journal_t * j, knot_db_t * db, const changeset_t
 		make_key2(serial, i, &key);
 		txn_insert(txn, &key, vals+i, 0);
 		inserted_size += (vals+i)->len;
-		if (txn->ret == KNOT_ELIMIT || // txn full, commit and start over
-		    (float) inserted_size > DB_MAX_INSERT_TXN * (float) j->fslimit) { // insert txn too large
+		if ((float) inserted_size > DB_MAX_INSERT_TXN * (float) j->fslimit) { // insert txn too large
 			inserted_size = 0;
 			restarted = i;
 			txn->ret = KNOT_EOK;
