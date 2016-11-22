@@ -347,7 +347,7 @@ static void test_store_load(journal_t *j, char *jfilename)
 	changesets_free(&l);
 	init_list(&l);
 	assert(journal_flush(j) == KNOT_EOK);
-	assert(drop_journal(j) == KNOT_EOK); /* Clear the journal for the collision test */
+	assert(drop_journal(j, NULL) == KNOT_EOK); /* Clear the journal for the collision test */
 
 	/* Test for serial number collision handling. We insert changesets
 	 * with valid serial sequence that overflows and then collides with itself.
@@ -375,6 +375,7 @@ static void test_store_load(journal_t *j, char *jfilename)
 	ret = journal_load_changesets(j, &l, 0);
 	int ret2 = journal_load_changesets(j, &l, 1);
 	int ret3 = journal_load_changesets(j, &l, 2);
+	fprintf(stderr, "ret=%d ret2=%d ret3=%d\n", ret, ret2, ret3);
 	ok(ret == KNOT_ENOENT && ret2 == KNOT_ENOENT && ret3 == KNOT_EOK &&
 	   changesets_list_eq(&l, &k), "journal: serial collision");
 	ret = journal_check(j, KNOT_JOURNAL_CHECK_SILENT);
@@ -491,7 +492,7 @@ static void test_merge(journal_t * j, const char * fname)
 	assert(ret == KNOT_EOK);
 	ok(merge_allowed(j), "journal: merge allowed");
 
-	ret = drop_journal(j);
+	ret = drop_journal(j, NULL);
 	assert(ret == KNOT_EOK);
 
 	// insert stuff and check the merge
@@ -516,7 +517,7 @@ static void test_merge(journal_t * j, const char * fname)
 	ret = journal_load_changesets(j, &l, (uint32_t) (i - 3));
 	ok(list_size(&l) == 4, "journal: read short history of merged/unmerged changesets");
 
-	ret = drop_journal(j);
+	ret = drop_journal(j, NULL);
 	assert(ret == KNOT_EOK);
 
 	// disallow merge
