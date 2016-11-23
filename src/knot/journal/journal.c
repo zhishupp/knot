@@ -46,6 +46,7 @@ const uint32_t JOURNAL_VERSION = 10;
  * DB_KEEP_MERGED ... if the merged changeset is present
  * DB_KEEP_FORMERGE ... if merging is allowed but not yet present
  * DB_DISPOSE_RATIO ... when freeing, delete DB_DISPOSE_RATIO times more than minimum needed (to prevent deleting too often) <-- anyway when freeing the freed amount is a very rough estimate !!
+ * DB_MAX_INSERT_TXN ... if one inserted changeset is too large, split the insertion into multiple transactions
  *
  * TODO: make those be configurable in conf() ?
  */
@@ -68,13 +69,14 @@ typedef struct journal_metadata {
 	uint32_t last_serial_to;	// serial_to of the last changeset
 	uint32_t last_flushed;		// serial_from of the last flushed (or merged) chengeset
 	uint32_t merged_serial;		// "serial_from" of merged changeset
-	uint32_t dirty_serial;		// serial_from of an incompletely inserted changeset which shall be deleted
+	uint32_t dirty_serial;		// serial_from of an incompletely inserted changeset which shall be deleted (see DB_MAX_INSERT_TXN)
 	uint32_t flags;			// LAST_FLUSHED_VALID, SERIAL_TO_VALID, MERGED_SERIAL_VALID
 } journal_metadata_t;
 
 #define is_last_flushed(metadata, what) (((metadata).flags & LAST_FLUSHED_VALID) && (metadata).last_flushed == (what))
 #define is_flushed(metadata) (is_last_flushed((metadata), (metadata).last_serial) || !((metadata).flags & SERIAL_TO_VALID))
 #define metadata_flag(j, fl) ((j)->metadata.flags & (fl))
+#define shadow_flag(txn, fl) ((txn)->shadow_metadata.flags & (fl))
 
 static void copy_metadata(journal_metadata_t *a, journal_metadata_t *b)
 {
@@ -98,9 +100,6 @@ typedef struct {
 	journal_metadata_t shadow_metadata;
 } txn_ctx_t;
 
-// FIXME all public functions ... proper EINVAL for NULL params etc; all static functions ... proper asserts
-// FIXME walk through all the functions reusing txn and check the error states .. aborting txn is ok in case of error
-
 /*
  * ***************************** PART 0 *******************************
  *
@@ -110,6 +109,7 @@ typedef struct {
  */
 
 static int flush_allowed(journal_t * j) {
+	// TODO some "mutex" necessary ?
 	conf_val_t val = conf_zone_get(conf(), C_ZONEFILE_SYNC, j->zone_name);
 	if (val.item == NULL || conf_int(&val) >= 0) return 1; // val->item == NULL  --->  default behaviour, ie standard flush, no merge.
 	return 0;
@@ -161,18 +161,18 @@ static int try_flush(journal_t * j, txn_ctx_t * txn)
 		return KNOT_EOK;
 	}
 	if (merge_allowed(j)) return merge_journal(j, txn);
-
 	return KNOT_EBUSY; // returns EBUSY to caller from zone.c - it flushes the journal for us and tries again
 }
+
+static int metadata_flush(journal_t * j); // from PART III
 
 /*! \brief Just updates the metadata after journal was actually flushed */
 int journal_flush(journal_t *j)
 {
-	if (j == NULL) return KNOT_EINVAL;
+	if (j == NULL || j->db == NULL) return KNOT_EINVAL;
 
 	if (metadata_flag(j, SERIAL_TO_VALID)) {
-		j->metadata.last_flushed = j->metadata.last_serial;
-		j->metadata.flags |= LAST_FLUSHED_VALID;
+		return metadata_flush(j);
 	}
 
 	return KNOT_EOK;
@@ -185,8 +185,6 @@ int journal_flush(journal_t *j)
  *
  * ********************************************************************
  */
-
-
 
 /*! \brief Creates local-scoped handle for use with following functions
  * Please use just once in a function/block */
@@ -216,7 +214,7 @@ static void txn_abort(txn_ctx_t * t) // doesn't touch t->ret
 /*! \brief those check if txn failed in the past and return the caller function in case */
 #define txn_check(t, x) if ((t)->ret != KNOT_EOK) return (x)
 #define txn_check_void(t) if ((t)->ret != KNOT_EOK) return
-#define txn_check_ret(t) if ((t)->ret != KNOT_EOK) txn_check((t), (t)->ret)
+#define txn_check_ret(t) txn_check((t), (t)->ret)
 #define txn_inactive_inval(t) if (!(t)->active && (t)->ret == KNOT_EOK) (t)->ret = KNOT_ERROR
 
 static int update_metadata(journal_t * j, txn_ctx_t * txn, const char * md_key, uint32_t new_val); // from PART III
@@ -330,20 +328,22 @@ typedef struct {
 } journal_header_t;
 
 /*! \brief fill *to (aka knot_db_val_t * to) with DB key properties
- * these are macros define local variable make_key_local to save some allocation */
+ * beware the macros define local variable make_key_local to save some allocation */
+static void make_key3(journal_key_t * key_local, uint32_t serial, uint32_t chunk, knot_db_val_t * to)
+{
+	key_local->serial = htobe32(serial);
+	key_local->chunk = htobe32(chunk);
+	to->len = sizeof(*key_local);
+	to->data = key_local;
+}
+
 #define make_key(from, to) \
 	journal_key_t make_key_local; \
-	make_key_local.serial = htobe32((from)->serial); \
-	make_key_local.chunk = htobe32((from)->chunk); \
-	(to)->data = &make_key_local; \
-	(to)->len = sizeof(make_key_local)
+	make_key3(&make_key_local, (from)->serial, (from)->chunk, (to))
 
 #define make_key2(_serial, _chunk, to) \
-	journal_key_t make_key_local; \
-	make_key_local.serial = htobe32((_serial)); \
-	make_key_local.chunk = htobe32((_chunk)); \
-	(to)->data = &make_key_local; \
-	(to)->len = sizeof(make_key_local)
+	journal_key_t make_key2_local; \
+	make_key3(&make_key2_local, (_serial), (_chunk), (to))
 
 /*! \brief decode the key's properties */
 static void unmake_key(const knot_db_val_t * from, journal_key_t * to)
@@ -417,36 +417,30 @@ static int update_metadata(journal_t * j, txn_ctx_t * txn, const char * md_key, 
 	return KNOT_EOK;
 }
 
-// TODO this function was originally intended as the opponent of load_metadata() to be called when closing DB
-// now it's called only at the beginning and is useful just for storing version and zone_name
-// consider removing this function ...
-static int store_metadata(journal_t * j, txn_ctx_t * txn)
+static int metadata_flush(journal_t * j)
 {
-	reuse_txn_ctx(t, j, txn, 0);
+	local_txn_ctx(txn, j);
+	txn_beg(txn, 0);
+	txn->shadow_metadata.last_flushed = txn->shadow_metadata.last_serial;
+	txn->shadow_metadata.flags |= LAST_FLUSHED_VALID;
+	txn_commit(txn);
+	txn_check_ret(txn);
+	return KNOT_EOK;
+}
 
+static int store_zone_name(journal_t * j, txn_ctx_t * txn)
+{
+	if (txn == NULL) return KNOT_EINVAL;
 	knot_db_val_t key, val;
-
-	uint32_t version = JOURNAL_VERSION;
-
-	update_metadata(j, t, "version",       version);
-	update_metadata(j, t, "first_serial",  j->metadata.first_serial);
-	update_metadata(j, t, "last_serial",   j->metadata.last_serial);
-	update_metadata(j, t, "last_serial_to",j->metadata.last_serial_to);
-	update_metadata(j, t, "last_flushed",  j->metadata.last_flushed);
-	update_metadata(j, t, "merged_serial", j->metadata.merged_serial);
-	update_metadata(j, t, "dirty_serial",  j->metadata.merged_serial);
-	update_metadata(j, t, "flags",         j->metadata.flags);
-
 	key.len = strlen("zone_name") + 1;
 	key.data = (void *) "zone_name";
 	val.len = strlen((const char *) j->zone_name) + 1;
 	val.data = (void *) j->zone_name;
-	txn_insert(t, &key, &val, 0);
-
-	unreuse_txn_ctx(t, txn);
-	txn_check_ret(t);
+	txn_insert(txn, &key, &val, 0);
+	txn_check_ret(txn);
 	return KNOT_EOK;
 }
+
 
 /*! \brief Load from meta_db incl version check and endian converison. */
 static int load_metadata(journal_t * j)
@@ -459,61 +453,43 @@ static int load_metadata(journal_t * j)
 	#define load_metadata_one(keystr, storeto) { \
 		key.len = strlen(keystr) + 1; \
 		key.data = (void * ) (keystr); \
-		txn_find_force(txn, &key, &val, 0); \
-		txn_check_ret(txn); \
-		if (val.len != sizeof(storeto)) { \
-			txn_abort(txn); \
-			return KNOT_EMALF; \
-		} \
-		if (sizeof(storeto) == sizeof(uint32_t)) { \
+		if (txn_find(txn, &key, &val, 0)) { \
+			if (val.len != sizeof(storeto)) { \
+				txn_abort(txn); \
+				return KNOT_EMALF; \
+			} \
 			storeto = be32toh(*(uint32_t *) val.data); \
 		} \
-		else { \
-			memcpy(&storeto, val.data, sizeof(storeto)); \
-		} \
+		/*else log_zone_info(j->zone_name, "metadata %s not found in journal, expecting zero\n", keystr);*/ \
+		txn_check_ret(txn); \
 	}
 
 	uint32_t version = 0;
+	// version is stored in BCD code: 10 means "1.0"
+	key.len = strlen("version") + 1;
+	key.data = (void *) "version";
 
-	if (txn_db_count(txn) == 0) {
+	if (txn_db_count(txn) == 0 || !txn_find(txn, &key, &val, 0)) {
 		// completely clean new journal, write version and zone_name
 		assert(j->metadata.flags == 0);
-		store_metadata(j, txn);
+		update_metadata(j, txn, "version", JOURNAL_VERSION);
+		//txn->shadow_metadata.version = JOURNAL_VERSION; // not effective
+		store_zone_name(j, txn);
 		txn_commit(txn);
 		txn_check_ret(txn);
 		return KNOT_EOK;
 	}
 
-	// version is stored in BCD code: 10 means "1.0"
-	key.len = strlen("version") + 1;
-	key.data = (void *) "version";
-	if (!txn_find(txn, &key, &val, 0)) {
-		txn_abort(txn);
-		return txn->ret; // KNOT_EOK if not found instead of KNOT_ENOENT !
-	}
+	// val is filled inside the if (...) above
 	if (val.len == sizeof(version)) version = be32toh(*(uint32_t *) val.data); // else first-digit check also fails
 
 	if (first_digit(version) != first_digit(JOURNAL_VERSION)) {
 		txn_abort(txn);
-		return KNOT_ENOTSUP; // TODO another option how to proceed is overwriting journal with older version and start with clear one, like below:
-		/*
-		log_zone_error(j->zone_name, "different journal version detected, overwriting");
-		version = htobe32(JOURNAL_VERSION);
-		key.len = strlen("version");
-		key.data = "version";
-		val.len = sizeof(version);
-		val.data = &version;
-		txn_beg_jdb(txn, meta_db, 0);
-		txn_insert(txn, &key, &val, 0);
-		txn_commit(txn);
-		txn_check_ret(txn);
-		txn_beg_jdb(txn, meta_db, KNOT_DB_RDONLY);
-		// no return here (or better yes ?)
-		*/
+		return KNOT_ENOTSUP; // TODO another option how to proceed is overwriting journal with older version and start with clear one
 	}
 
 	if (version != JOURNAL_VERSION) {
-		// FIXME warning
+		log_zone_warning(j->zone_name, "Opening journal with different version expected=%d found=%d\n", JOURNAL_VERSION, version);
 	}
 
 	load_metadata_one("first_serial",   j->metadata.first_serial);
@@ -521,14 +497,17 @@ static int load_metadata(journal_t * j)
 	load_metadata_one("last_serial_to", j->metadata.last_serial_to);
 	load_metadata_one("last_flushed",   j->metadata.last_flushed);
 	load_metadata_one("merged_serial",  j->metadata.merged_serial);
-	load_metadata_one("dirty_serial",  j->metadata.dirty_serial);
+	load_metadata_one("dirty_serial",   j->metadata.dirty_serial);
 	load_metadata_one("flags",          j->metadata.flags);
 
-	txn_commit(txn);
+	txn->ret = txn->j->db_api->txn_commit(txn->txn);
+	if (txn->ret != KNOT_EOK) {
+	    txn_abort(txn);
+	}
 
 	#undef load_metadata_one
 
-	return KNOT_EOK;
+	return txn->ret;
 }
 
 int journal_load_zone_name(journal_t * j, const knot_dname_t ** zname)
@@ -648,7 +627,7 @@ typedef int (*iteration_cb_t)(iteration_ctx_t *ctx);
 #define check_ret_iter(err) \
 	if (ret != KNOT_EOK || ctx->iter == NULL) { \
 		if (ret == KNOT_EOK) ret = (err); \
-		if (ctx->iter != NULL) j->db_api->iter_finish(ctx->iter); \
+		if (ctx->iter != NULL && ctx->txn->active) j->db_api->iter_finish(ctx->iter); \
 		if (vals != NULL) free(vals); \
 		txn_abort(txn); \
 		return ret; \
@@ -826,7 +805,7 @@ static int load_merged_changeset(journal_t * j, txn_ctx_t * txn, changeset_t ** 
 /*! \brief API: load all changesets since "from" serial into dst. */
 int journal_load_changesets(journal_t *j, list_t *dst, uint32_t from)
 {
-	if (j == NULL || dst == NULL) return KNOT_EINVAL;
+	if (j == NULL || j->db == NULL || dst == NULL) return KNOT_EINVAL;
 	int ret;
 	local_txn_ctx(txn, j);
 	txn_beg(txn, KNOT_DB_RDONLY);
@@ -886,9 +865,7 @@ static int del_upto_itercb(iteration_ctx_t * ctx)
 static int delete_upto(journal_t * j, txn_ctx_t * txn, uint32_t dbfirst, uint32_t last)
 {
 	iteration_ctx_t ctx = { .method = JOURNAL_ITERATION_CHUNKS };
-	int ret = iterate(j, txn, del_upto_itercb, &ctx, dbfirst, last);
-	if (ret != KNOT_EOK) return ret;
-	return KNOT_EOK;
+	return iterate(j, txn, del_upto_itercb, &ctx, dbfirst, last);
 }
 
 static int delete_merged_changeset(journal_t * j, txn_ctx_t * t)
@@ -906,8 +883,8 @@ static int drop_journal(journal_t * j, txn_ctx_t * _txn)
 {
 	int ret = KNOT_EOK;
 	reuse_txn_ctx(txn, j, _txn, 0);
-	if ((txn->shadow_metadata.flags & MERGED_SERIAL_VALID)) ret = delete_merged_changeset(j, txn);
-	if (ret == KNOT_EOK && (txn->shadow_metadata.flags & SERIAL_TO_VALID)) ret = delete_upto(j, txn, txn->shadow_metadata.first_serial, txn->shadow_metadata.last_serial);
+	if (shadow_flag(txn, MERGED_SERIAL_VALID)) ret = delete_merged_changeset(j, txn);
+	if (ret == KNOT_EOK && shadow_flag(txn, SERIAL_TO_VALID)) ret = delete_upto(j, txn, txn->shadow_metadata.first_serial, txn->shadow_metadata.last_serial);
 	unreuse_txn_ctx(txn, _txn);
 	txn_check_ret(txn);
 	return ret;
@@ -932,7 +909,7 @@ static int del_tofree_itercb(iteration_ctx_t * ctx)
 		ctx->txn->shadow_metadata.first_serial = ctx->serial_to;
 		if (serial_compare(ctx->txn->shadow_metadata.last_flushed, ctx->serial) == 0) {
 			ctx->txn->shadow_metadata.flags &= ~LAST_FLUSHED_VALID;
-			dfctx->to_be_freed = 0;
+			dfctx->to_be_freed = 0; // prevents deleting unflushed changesets
 		}
 		if (serial_compare(ctx->txn->shadow_metadata.last_serial,  ctx->serial) == 0) ctx->txn->shadow_metadata.flags &= ~SERIAL_TO_VALID;
 		if (dfctx->freed_approx >= dfctx->to_be_freed) dfctx->to_be_freed = 0;
@@ -971,15 +948,15 @@ static int delete_dirty_serial(journal_t * j, txn_ctx_t * _txn)
 
         int chunk = 0;
         knot_db_val_t key, unused;
+        journal_key_t jk;
 
         reuse_txn_ctx(txn, j, _txn, 0);
 
-        make_key2(txn->shadow_metadata.dirty_serial, 0, &key);
-
+        make_key3(&jk, txn->shadow_metadata.dirty_serial, 0, &key);
 
         while (txn_find(txn, &key, &unused, 0)) {
                 txn_del(txn, &key);
-                make_key2(txn->shadow_metadata.dirty_serial, ++chunk, &key);
+                make_key3(&jk, txn->shadow_metadata.dirty_serial, ++chunk, &key);
         }
 
         if (chunk > 0) log_zone_info(j->zone_name, "deleted dirty journal record (serial %u)\n", txn->shadow_metadata.dirty_serial);
@@ -1030,7 +1007,7 @@ static int insert_one_changeset(journal_t * j, txn_ctx_t * _txn, const changeset
 #define i_o_ch_txn_check if (txn->ret != KNOT_EOK) { txn_abort(txn); ret = txn->ret; goto i_o_ch_free; }
 
 	// PART 1: continuity check
-	if (!is_merged && (txn->shadow_metadata.flags & SERIAL_TO_VALID) && serial_compare(txn->shadow_metadata.last_serial_to, serial) != 0) {
+	if (!is_merged && shadow_flag(txn, SERIAL_TO_VALID) && serial_compare(txn->shadow_metadata.last_serial_to, serial) != 0) {
 		log_zone_warning(j->zone_name, "discontinuity in chages history (%u -> %u), dropping older changesets", txn->shadow_metadata.last_serial_to, serial);
 		ret = try_flush(j, txn);
 		if (ret != KNOT_EOK) goto i_o_ch_free;
@@ -1126,7 +1103,7 @@ static int insert_one_changeset(journal_t * j, txn_ctx_t * _txn, const changeset
 
 	// PART 7: metadata update
 	if (!is_merged) {
-		if (!(txn->shadow_metadata.flags & SERIAL_TO_VALID)) txn->shadow_metadata.first_serial = serial;
+		if (!shadow_flag(txn, SERIAL_TO_VALID)) txn->shadow_metadata.first_serial = serial;
 		txn->shadow_metadata.flags |= SERIAL_TO_VALID;
 		txn->shadow_metadata.last_serial = serial;
 		txn->shadow_metadata.last_serial_to = serial_to;
@@ -1155,6 +1132,7 @@ static int insert_one_changeset(journal_t * j, txn_ctx_t * _txn, const changeset
 		log_zone_warning(j->zone_name, "failed to insert a changeset into journal in %d transactions (%s)", insert_txn_count, knot_strerror(ret)); // TODO consider removing
 		journal_check(j, KNOT_JOURNAL_CHECK_INFO); // debug
 	}
+	//else log_zone_info(j->zone_name, "inserted %u -> %u\n", serial, serial_to);
 
 	return ret;
 }
@@ -1166,11 +1144,14 @@ static int insert_merged_changeset(journal_t * j, txn_ctx_t * txn, const changes
 
 int journal_store_changeset(journal_t *journal, changeset_t *ch)
 {
+	if (journal == NULL || journal->db == NULL || ch == NULL) return KNOT_EINVAL;
 	return insert_one_changeset(journal, NULL, ch, 0);
 }
 
 int journal_store_changesets(journal_t *journal, list_t *src)
 {
+	if (journal == NULL || journal->db == NULL) return KNOT_EINVAL;
+
 	int ret = KNOT_EOK;
 	changeset_t *chs = NULL;
 	local_txn_ctx(txn, journal);
@@ -1208,18 +1189,15 @@ static int find_first_unflushed(journal_t * j, txn_ctx_t * _txn, uint32_t * firs
 	uint32_t lf = txn->shadow_metadata.last_flushed;
 	make_key2(lf, 0, &key);
 
-
 	txn_find_force(txn, &key, &val, 0);
+	txn_check_ret(txn);
 
-	if (txn->ret == KNOT_EOK) {
-		unmake_header(&val, first, NULL, NULL, NULL);
-
-		if ((txn->shadow_metadata.flags & SERIAL_TO_VALID) && serial_compare(*first, txn->shadow_metadata.last_serial_to) == 0) txn->ret = KNOT_ENOENT;
-	}
+	unmake_header(&val, first, NULL, NULL, NULL);
+	if ((txn->shadow_metadata.flags & SERIAL_TO_VALID) && serial_compare(*first, txn->shadow_metadata.last_serial_to) == 0) txn->ret = KNOT_ENOENT;
 
 	unreuse_txn_ctx(txn, _txn);
-
-	return txn->ret;
+	txn_check_ret(txn);
+	return KNOT_EOK;
 }
 
 static int merge_itercb(iteration_ctx_t * ctx)
@@ -1316,7 +1294,7 @@ static int init_db(journal_t *j)
 	struct knot_db_lmdb_opts opts = KNOT_DB_LMDB_OPTS_INITIALIZER;
 	opts.path = j->path;
 	opts.mapsize = j->fslimit;
-	opts.maxdbs = 3; // One DB for data, one for metadata and one for merged changeset.
+	opts.maxdbs = 1;
 
 	opts.dbname = DATA_DB_NAME;
 	int ret = j->db_api->init(&j->db, NULL, &opts);
@@ -1397,12 +1375,7 @@ int journal_open(journal_t *j, const char *path, size_t fslimit, const knot_dnam
 
 void journal_close(journal_t *j)
 {
-	if (j == NULL || j->path == NULL) return;
-
-	//int ret = store_metadata(j); // not needed anymore - metadata are updated continuously
-	//if (ret != KNOT_EOK) {
-	//	log_zone_error(j->zone_name, "unable to store journal metadata");
-	//}
+	if (j == NULL || j->db == NULL || j->path == NULL) return;
 
 	j->db_api->deinit(j->db);
 
@@ -1446,6 +1419,7 @@ static void _jch_print(const knot_dname_t * zname, int warn_level, const char * 
         }
 }
 
+// FIXME repair journal_check completely
 int journal_check(journal_t *j, int warn_level)
 {
 	int ret = KNOT_EOK, ret2 = KNOT_EOK, i = 1;
