@@ -23,6 +23,27 @@
 #include "dnssec/kasp.h"
 #include "dnssec.h"
 
+static void test_keyusage_empty(void)
+{
+	diag("%s", __func__);
+
+	dnssec_kasp_keyusage_t *k = dnssec_kasp_keyusage_new();
+
+	remove("/tmp/keyusage.json");
+
+	ok(load_keyusage(k, "/tmp/keyusage.json")== DNSSEC_NOT_FOUND, "kayusage_load empty, no keyusage");
+
+	ok(dnssec_list_is_empty(k->keyrecords), "List of records is empty.");
+
+	ok(save_keyusage(k, "/tmp/keyusage.json") == DNSSEC_EOK , "kayusage_save empty");
+
+	ok(load_keyusage(k, "/tmp/keyusage.json")== DNSSEC_EOK , "kayusage_load empty");
+
+	ok(dnssec_list_is_empty(k->keyrecords), "List of records is empty.");
+
+	dnssec_kasp_keyusage_free(k);
+}
+
 static void test_keyusage_basic(void)
 {
 	diag("%s", __func__);
@@ -52,7 +73,7 @@ static void test_keyusage_basic(void)
 	dnssec_keyusage_remove(k, "prvni", "zona2");
 	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is not used.");
 
-	dnssec_kasp_keyusage_free(&k);
+	dnssec_kasp_keyusage_free(k);
 }
 
 static void test_keyusage_file(void)
@@ -65,7 +86,7 @@ static void test_keyusage_file(void)
 
 	ok(save_keyusage(k, "/tmp/keyusage.json") == DNSSEC_EOK , "kayusage_save");
 
-	dnssec_kasp_keyusage_free(&k);
+	dnssec_kasp_keyusage_free(k);
 	k = dnssec_kasp_keyusage_new();
 
 	ok(!dnssec_keyusage_is_used(k, "prvni"), "Key is not used - freed succesfully.");
@@ -76,12 +97,13 @@ static void test_keyusage_file(void)
 	ok(dnssec_keyusage_is_used(k, "prvni"), "Key is used - loaded succesfully.");
 	ok(dnssec_keyusage_is_used(k, "druhy"), "Key is used - loaded succesfully.");
 
-	dnssec_kasp_keyusage_free(&k);
+	dnssec_kasp_keyusage_free(k);
 }
 
 int main(int argc, char *argv[])
 {
 	plan_lazy();
+	test_keyusage_empty();
 	test_keyusage_basic();
 	test_keyusage_file();
 	return 0;

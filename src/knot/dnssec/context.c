@@ -228,7 +228,7 @@ void kdnssec_ctx_deinit(kdnssec_ctx_t *ctx)
 	dnssec_kasp_policy_free(ctx->policy);
 	dnssec_kasp_zone_free(ctx->zone);
 	dnssec_kasp_deinit(ctx->kasp);
-	dnssec_kasp_keyusage_free(&ctx->keyusage);
+	dnssec_kasp_keyusage_free(ctx->keyusage);
 
 	memset(ctx, 0, sizeof(*ctx));
 }
@@ -264,6 +264,8 @@ int kdnssec_ctx_init(kdnssec_ctx_t *ctx, const knot_dname_t *zone_name)
 		kdnssec_ctx_deinit(&new_ctx);
 		return r;
 	}
+
+	new_ctx.keyusage = dnssec_kasp_keyusage_new();
 
 	new_ctx.now = time(NULL);
 

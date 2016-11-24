@@ -47,20 +47,20 @@ _public_
 dnssec_kasp_keyusage_t *dnssec_kasp_keyusage_new()
 {
 	dnssec_kasp_keyusage_t *keyusage = malloc(sizeof(keyusage));
-	clear_struct(keyusage);
+	//clear_struct(keyusage);
 	keyusage->keyrecords = dnssec_list_new();
 
 	return keyusage;
 }
 
 _public_
-void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t **keyusage)
+void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t *keyusage)
 {
-	if (*keyusage == NULL) {
+	if (keyusage == NULL) {
 		return;
 	}
 
-	keyusage_cleanup(*keyusage);
-	free(*keyusage);
-	*keyusage = NULL;
+	keyusage_cleanup(keyusage);
+	free(keyusage);
+	keyusage = NULL;
 }

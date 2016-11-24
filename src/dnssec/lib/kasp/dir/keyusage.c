@@ -25,15 +25,15 @@
 
 static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
 {
-	if (keyusage == NULL) {
-		keyusage = dnssec_kasp_keyusage_new();
-	} else {
-		dnssec_list_clear(keyusage->keyrecords);
-	}
-
 	json_t *jrecord = NULL;
 	int a, b;
-
+	if (!json_is_array(json)) {
+		if (json_is_null(json)) {
+			return DNSSEC_EOK;
+		} else {
+			return DNSSEC_CONFIG_MALFORMED;
+		}
+	}
 	json_array_foreach(json, a, jrecord) {
 		json_t *jkeytag = NULL;
 		jkeytag = json_object_get(jrecord, "keytag");
@@ -75,6 +75,10 @@ static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json
 	assert(json);
 	kasp_keyusage_t *record;
 	int r;
+
+	if (dnssec_list_is_empty(keyusage->keyrecords)) {
+		return DNSSEC_EOK;
+	}
 
 	json_t *jrecords = json_array();
 	if (!jrecords) {
@@ -153,6 +157,8 @@ int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename)
 	assert(keyusage);
 	assert(filename);
 
+	dnssec_list_clear(keyusage->keyrecords);
+
 	_cleanup_fclose_ FILE *file = fopen(filename, "r");
 	if (!file) {
 		return DNSSEC_NOT_FOUND;
@@ -161,7 +167,11 @@ int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename)
 	json_error_t error = { 0 };
 	_json_cleanup_ json_t *json = json_loadf(file, JSON_LOAD_OPTIONS, &error);
 	if (!json) {
-		return DNSSEC_CONFIG_MALFORMED;
+		if (error.position != 1) {
+			return DNSSEC_CONFIG_MALFORMED;
+		} else {
+			return DNSSEC_EOK;
+		}
 	}
 
 	return import_keyusage(keyusage, json);
@@ -175,17 +185,23 @@ int save_keyusage(const dnssec_kasp_keyusage_t *keyusage, const char *filename)
 	_json_cleanup_ json_t *json = NULL;
 	int r = export_keyusage(keyusage, &json);
 	if (r != DNSSEC_EOK) {
+	    fprintf(stdout, "export :(");
 		return r;
 	}
 
 	_cleanup_fclose_ FILE *file = fopen(filename, "w");
 	if (!file) {
+	    fprintf(stdout, "create file :(");
 		return DNSSEC_NOT_FOUND;
 	}
 
-	r = json_dumpf(json, file, JSON_DUMP_OPTIONS);
-	if (r != DNSSEC_EOK) {
-		return r;
+	if (json)
+	{
+		r = json_dumpf(json, file, JSON_DUMP_OPTIONS);
+		if (r != DNSSEC_EOK) {
+		    fprintf(stdout, "dump :(");
+			return r;
+		}
 	}
 
 	fputc('\n', file);
