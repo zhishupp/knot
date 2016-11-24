@@ -349,7 +349,7 @@ int dnssec_kasp_keystore_exists(dnssec_kasp_t *kasp, const char *keystore_name)
 
 _public_
 int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp,
-			    dnssec_kasp_keyusage_t *keyusage_ptr)
+			    dnssec_kasp_keyusage_t **keyusage_ptr)
 {
 	if (!kasp || !keyusage_ptr) {
 		return DNSSEC_EINVAL;
@@ -366,7 +366,7 @@ int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp,
 		return r;
 	}
 
-	keyusage_ptr = keyusage;
+	*keyusage_ptr = keyusage;
 
 	return DNSSEC_EOK;
 }

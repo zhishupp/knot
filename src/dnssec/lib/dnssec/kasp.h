@@ -423,7 +423,7 @@ int dnssec_kasp_keystore_open(dnssec_kasp_t *kasp, const char *backend,
 
 dnssec_kasp_keyusage_t *dnssec_kasp_keyusage_new(void);
 void dnssec_kasp_keyusage_free(dnssec_kasp_keyusage_t *keyusage);
-int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp, dnssec_kasp_keyusage_t *keyusage);
+int dnssec_kasp_keyusage_load(dnssec_kasp_t *kasp, dnssec_kasp_keyusage_t **keyusage);
 int dnssec_kasp_keyusage_save(dnssec_kasp_t *kasp, const dnssec_kasp_keyusage_t *keyusage);
 int dnssec_kasp_keyusage_remove(dnssec_kasp_t *kasp);
 int dnssec_kasp_keyusage_exists(dnssec_kasp_t *kasp);

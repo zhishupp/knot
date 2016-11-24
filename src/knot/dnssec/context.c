@@ -213,6 +213,9 @@ int kdnssec_kasp_init(kdnssec_ctx_t *ctx, const char *kasp_path, const char *zon
 	}
 
 	r = dnssec_kasp_keyusage_load(ctx->kasp, &ctx->keyusage);
+	if (r != DNSSEC_EOK && r != DNSSEC_NOT_FOUND) {
+		return r;
+	}
 
 	return get_keystore(ctx->kasp, ctx->policy->keystore, &ctx->keystore,
 	                    ctx->legacy);
