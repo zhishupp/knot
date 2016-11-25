@@ -129,6 +129,59 @@ static bool enable_pktinfo(int sock, int family)
 	return setsockopt(sock, level, option, &on, sizeof(on)) == 0;
 }
 
+/*!\brief Set socket to disable Path MTU discovery.
+ *
+ * Set (UDP) socket to disable pmtud as per
+ * draft-andrews-dnsext-udp-fragmentation. For IPv4 UDP set DF=0 to
+ * outgoing datagrams. For IPv6 UDP set MTU=1280 to outgoing datagrams.
+ *
+ * \param socket socket to be set.
+ * \param family socket address family
+ *
+ * \retval 1 if successful
+ * \retval 0 if not successful (socket option not supported)
+ */
+
+static int dont_pmtud(int sock, int family)
+{
+#ifndef IPV6_MIN_MTU
+#  define IPV6_MIN_MTU 1280
+#endif /* IPV6_MIN_MTU */
+
+	if(family == AF_INET) {
+#if defined(IP_MTU_DISCOVER) && defined(IP_PMTUDISC_OMIT)
+		int pmtud_omit = IP_PMTUDISC_OMIT;
+		if(setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER,
+			&pmtud_omit, sizeof(pmtud_omit)) == 0) return 1;
+#endif
+#elif defined(IP_DONTFRAG)
+		/* BSDs and others */
+		int dontfrag_off = 0;
+		if(setsockopt(sock, IPPROTO_IP, IP_DONTFRAG,
+			&dontfrag_off, sizeof(dontfrag_off)) == 0) return 1;
+#endif
+	}
+	else if (family == AF_INET6) {
+#if defined(IPV6_MTU_DISCOVER) && defined(IPV6_PMTUDISC_OMIT)
+		int pmtud_omit = IPV6_PMTUDISC_OMIT;
+		if(setsockopt(sock, IPPROTO_IPV6, IPV6_MTU_DISCOVER,
+		       &pmtud_omit, sizeof(pmtud_omit)) == 0) return 1;
+#endif
+#elif defined(IPV6_USE_MIN_MTU)
+		int min_mtu_on = 1;
+		if(setsockopt(sock, IPPROTO_IPV6, IPV6_USE_MIN_MTU,
+			&min_mtu_on, sizeof(min_mtu_on)) == 0) return 1;
+#endif
+#elif defined(IPV6_MTU)
+		/* fallback to IPV6_MTU if IPV6_USE_MIN_MTU not available */
+		int ipv6_min_mtu = IPV6_MIN_MTU;
+		if(setsockopt(sock, IPPROTO_IPV6, IPV6_MTU,
+			&ipv6_min_mtu, sizeof(ipv6_min_mtu)) == 0) return 1;
+#endif
+	}
+	return 0;
+}
+
 /*!
  * \brief Initialize new interface from config value.
  *
