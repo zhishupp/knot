@@ -58,6 +58,17 @@ static int generate_initial_key(dnssec_event_ctx_t *ctx, bool ksk)
 		return r;
 	}
 
+	char *path;
+	if (asprintf(&path, "%s/keyusage", ctx->kasp->functions->base_path(ctx->kasp->ctx)) == -1){
+		return DNSSEC_ENOMEM;
+	}
+	dnssec_keyusage_t *keyusage = dnssec_list_new();
+	dnssec_keyusage_load(keyusage, path);
+	dnssec_keyusage_add(keyusage, key->id, ctx->zone->name);
+	dnssec_keyusage_save(keyusage, path);
+	dnssec_list_clear(keyusage);
+	free(path);
+
 	key->timing.active  = ctx->now;
 	key->timing.publish = ctx->now;
 

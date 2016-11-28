@@ -29,7 +29,6 @@
 #include "kasp/internal.h"
 #include "kasp/zone.h"
 #include "key.h"
-#include "keyusage.h"
 #include "list.h"
 #include "path.h"
 #include "shared.h"
@@ -122,14 +121,6 @@ static int entity_list(const char *entity, void *_ctx, dnssec_list_t *names)
 ({ \
 	const char *path = ((kasp_dir_ctx_t *)ctx)->path; \
 	const char *name = object->name; \
-	_cleanup_free_ char *config = file_from_entity(path, entity, name); \
-	config ? callback(object, config) : DNSSEC_ENOMEM; \
-})
-
-#define entity_keyusage_io(entity, ctx, object, callback) \
-({ \
-	const char *path = ((kasp_dir_ctx_t *)ctx)->path; \
-	const char *name = "keyusage"; \
 	_cleanup_free_ char *config = file_from_entity(path, entity, name); \
 	config ? callback(object, config) : DNSSEC_ENOMEM; \
 })
@@ -266,39 +257,11 @@ static int kasp_dir_keystore_save(void *ctx, const dnssec_kasp_keystore_t *keyst
 	return entity_io(ENTITY_KEYSTORE, ctx, keystore, save_keystore_config);
 }
 
-#define ENTITY_KEYUSAGE "keyusage"
-
-static int kasp_dir_keyusage_remove(void *ctx)
-{
-	return entity_remove(ENTITY_KEYUSAGE, ctx, "keyusage");
-}
-
-static int kasp_dir_keyusage_exists(void *ctx)
-{
-	return entity_exists(ENTITY_KEYUSAGE, ctx, "keyusage");
-}
-
-static int kasp_dir_keyusage_load(void *ctx, dnssec_kasp_keyusage_t *keyusage)
-{
-	return entity_keyusage_io(ENTITY_KEYUSAGE, ctx, keyusage, load_keyusage);
-}
-
-static int kasp_dir_keyusage_save(void *ctx, const dnssec_kasp_keyusage_t *keyusage)
-{
-        return entity_keyusage_io(ENTITY_KEYUSAGE, ctx, keyusage, save_keyusage);
-}
-
 #define ENTITY_CALLBACKS(name) \
   .name##_load   = kasp_dir_##name##_load,   \
   .name##_save   = kasp_dir_##name##_save,   \
   .name##_remove = kasp_dir_##name##_remove, \
   .name##_list   = kasp_dir_##name##_list,   \
-  .name##_exists = kasp_dir_##name##_exists
-
-#define ENTITY_KEYUSAGE_CALLBACKS(name) \
-  .name##_load   = kasp_dir_##name##_load,   \
-  .name##_save   = kasp_dir_##name##_save,   \
-  .name##_remove = kasp_dir_##name##_remove, \
   .name##_exists = kasp_dir_##name##_exists
 
 /* -- public API ----------------------------------------------------------- */
@@ -314,7 +277,6 @@ const dnssec_kasp_store_functions_t *dnssec_kasp_dir_api(void)
 		ENTITY_CALLBACKS(zone),
 		ENTITY_CALLBACKS(policy),
 		ENTITY_CALLBACKS(keystore),
-		ENTITY_KEYUSAGE_CALLBACKS(keyusage),
 	};
 
 	return &api;

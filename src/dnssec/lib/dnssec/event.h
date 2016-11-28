@@ -51,7 +51,6 @@ struct dnssec_event_ctx {
 	dnssec_kasp_zone_t *zone;
 	dnssec_kasp_policy_t *policy;
 	dnssec_keystore_t *keystore;
-	dnssec_kasp_keyusage_t *keyusage;
 };
 
 typedef struct dnssec_event_ctx dnssec_event_ctx_t;

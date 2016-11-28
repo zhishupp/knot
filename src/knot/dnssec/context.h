@@ -35,7 +35,6 @@ struct kdnssec_ctx {
 	dnssec_kasp_zone_t *zone;
 	dnssec_kasp_policy_t *policy;
 	dnssec_keystore_t *keystore;
-	dnssec_kasp_keyusage_t *keyusage;
 
 	uint32_t old_serial;
 	uint32_t new_serial;

@@ -13,7 +13,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+/*
 #include <assert.h>
 
 #include "error.h"
@@ -23,7 +23,7 @@
 #include "shared.h"
 #include <string.h>
 
-static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
+static int import_keyusage(dnssec_keyusage_t *keyusage, const json_t *json)
 {
 	json_t *jrecord = NULL;
 	int a, b;
@@ -63,20 +63,20 @@ static int import_keyusage(dnssec_kasp_keyusage_t *keyusage, const json_t *json)
 			dnssec_list_append(record->zones, zone);
 			free(zone);
 		}
-		dnssec_list_append(keyusage->keyrecords, record);
+		dnssec_list_append(keyusage, record);
 	}
 
 	return DNSSEC_EOK;
 }
 
-static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json)
+static int export_keyusage(dnssec_keyusage_t *keyusage, json_t **json)
 {
 	assert(keyusage);
 	assert(json);
 	kasp_keyusage_t *record;
 	int r;
 
-	if (dnssec_list_is_empty(keyusage->keyrecords)) {
+	if (dnssec_list_is_empty(keyusage)) {
 		return DNSSEC_EOK;
 	}
 
@@ -89,7 +89,7 @@ static int export_keyusage(const dnssec_kasp_keyusage_t *keyusage, json_t **json
 	json_t *jzone = NULL;
 	json_t *jzones = NULL;
 
-	dnssec_list_foreach(item, keyusage->keyrecords) {
+	dnssec_list_foreach(item, keyusage) {
 		record = dnssec_item_get(item);
 
 		json_t *jzones = json_array();
@@ -152,12 +152,12 @@ error:
 
 }
 
-int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename)
+int dnssec_keyusage_load(dnssec_keyusage_t *keyusage, const char *filename)
 {
 	assert(keyusage);
 	assert(filename);
 
-	dnssec_list_clear(keyusage->keyrecords);
+	dnssec_list_clear(keyusage);
 
 	_cleanup_fclose_ FILE *file = fopen(filename, "r");
 	if (!file) {
@@ -177,7 +177,7 @@ int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename)
 	return import_keyusage(keyusage, json);
 }
 
-int save_keyusage(const dnssec_kasp_keyusage_t *keyusage, const char *filename)
+int dnssec_keyusage_save(dnssec_keyusage_t *keyusage, const char *filename)
 {
 	assert(keyusage);
 	assert(filename);
@@ -207,3 +207,4 @@ int save_keyusage(const dnssec_kasp_keyusage_t *keyusage, const char *filename)
 	fputc('\n', file);
 	return DNSSEC_EOK;
 }
+*/

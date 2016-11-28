@@ -13,11 +13,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
-
+/*
 #pragma once
 
 #include "kasp.h"
 
-int load_keyusage(dnssec_kasp_keyusage_t *keyusage, const char *filename);
+int dnssec_keyusage_load(dnssec_keyusage_t *keyusage, const char *filename);
 
-int save_keyusage(const dnssec_kasp_keyusage_t *keyusage, const char *filename);
+int dnssec_keyusage_save(const dnssec_keyusage_t *keyusage, const char *filename);
+*/

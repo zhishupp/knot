@@ -155,10 +155,6 @@ static int exec_new_key(dnssec_event_ctx_t *ctx)
 	new_key->timing.publish = ctx->now;
 	new_key->timing.active = UINT32_MAX;
 
-	ctx->kasp->functions->keyusage_load(ctx->kasp,ctx->keyusage);
-	dnssec_keyusage_add(ctx->keyusage, new_key->id, ctx->zone->name);
-	ctx->kasp->functions->keyusage_save(ctx->kasp,ctx->keyusage);
-
 	return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 }
 
@@ -173,6 +169,17 @@ static int exec_new_signatures(dnssec_event_ctx_t *ctx)
 	active->timing.retire = ctx->now;
 	rolling->timing.active = ctx->now;
 
+	char *path;
+	if (asprintf(&path, "%s/keyusage", ctx->kasp->functions->base_path(ctx->kasp->ctx)) == -1){
+		return DNSSEC_ENOMEM;
+	}
+	dnssec_keyusage_t *keyusage = dnssec_list_new();
+	dnssec_keyusage_load(keyusage, path);
+	dnssec_keyusage_add(keyusage, rolling->id, ctx->zone->name);
+	dnssec_keyusage_save(keyusage, path);
+	dnssec_list_clear(keyusage);
+	free(path);
+
 	return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 }
 
@@ -183,10 +190,18 @@ static int exec_remove_old_key(dnssec_event_ctx_t *ctx)
 		return DNSSEC_EINVAL;
 	}
 
-	ctx->kasp->functions->keyusage_load(ctx->kasp,ctx->keyusage);
-	dnssec_keyusage_remove(ctx->keyusage, retired->id, ctx->zone->name);
-	ctx->kasp->functions->keyusage_save(ctx->kasp,ctx->keyusage);
-	if (dnssec_keyusage_is_used(ctx->keyusage, retired->id)) {
+	char *path;
+	if (asprintf(&path, "%s/keyusage", ctx->kasp->functions->base_path(ctx->kasp->ctx)) == -1){
+		return DNSSEC_ENOMEM;
+	}
+	fprintf(stdout,"keyusage %s\n", path);
+	dnssec_keyusage_t *keyusage = dnssec_list_new();
+	dnssec_keyusage_load(keyusage, path);
+	dnssec_keyusage_remove(keyusage, retired->id, ctx->zone->name);
+	dnssec_keyusage_save(keyusage, path);
+
+
+	if (dnssec_keyusage_is_used(keyusage, retired->id)) {
 		return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 	}
 
@@ -199,6 +214,9 @@ static int exec_remove_old_key(dnssec_event_ctx_t *ctx)
 			dnssec_list_remove(item);
 		}
 	}
+
+	dnssec_list_clear(keyusage);
+	free(path);
 
 	return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
 }

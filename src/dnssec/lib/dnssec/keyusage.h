@@ -18,17 +18,23 @@
 
 #include <dnssec/list.h>
 
-typedef struct kasp_keyusage {
+typedef struct record {
 	char *keytag;
 	dnssec_list_t *zones;
-} kasp_keyusage_t;
+} record_keyusage_t;
 
-typedef struct dnssec_kasp_keyusage {
-	dnssec_list_t *keyrecords;
-} dnssec_kasp_keyusage_t;
+typedef dnssec_list_t dnssec_keyusage_t;
 
-int dnssec_keyusage_add(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
+int dnssec_keyusage_add(dnssec_keyusage_t *keyusage, const char *keytag, char *zone);
 
-int dnssec_keyusage_remove(dnssec_kasp_keyusage_t *keyusage, const char *keytag, char *zone);
+int dnssec_keyusage_remove(dnssec_keyusage_t *keyusage, const char *keytag, char *zone);
 
-bool dnssec_keyusage_is_used(dnssec_kasp_keyusage_t *keyusage, const char *keytag);
+bool dnssec_keyusage_is_used(dnssec_keyusage_t *keyusage, const char *keytag);
+
+int dnssec_keyusage_load(dnssec_keyusage_t *keyusage, const char *filename);
+
+int dnssec_keyusage_save(dnssec_keyusage_t *keyusage, const char *filename);
+
+dnssec_keyusage_t *dnssec_keyusage_new(void);
+
+void dnssec_keyusage_free(dnssec_keyusage_t *keyusage);
