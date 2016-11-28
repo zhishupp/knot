@@ -54,6 +54,7 @@ int dnssec_keyusage_remove(dnssec_keyusage_t *keyusage, const char *keytag, char
 			dnssec_list_foreach(item2, record->zones) {
 				char *tmp = dnssec_item_get(item2);
 				if(strcmp(tmp,zone)==0) {
+					free(tmp);
 					dnssec_list_remove(item2);
 					if (dnssec_list_is_empty(record->zones)) {
 						free(record->keytag);
@@ -294,6 +295,10 @@ void dnssec_keyusage_free(dnssec_keyusage_t *keyusage)
 			record_keyusage_t *record = dnssec_item_get(item);
 
 			free(record->keytag);
+			dnssec_list_foreach(item2, record->zones) {
+				char *zone = dnssec_item_get(item2);
+				free(zone);
+			}
 			dnssec_list_free(record->zones);
 			free(record);
 		}
