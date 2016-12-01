@@ -58,7 +58,7 @@ check_PROGRAMS += \
 	confio				\
 	dthreads			\
 	fdset				\
-	journal				\
+	journal_lmdb			\
 	node				\
 	process_answer			\
 	process_query			\

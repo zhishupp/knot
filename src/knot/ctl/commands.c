@@ -927,9 +927,11 @@ static int zone_purge(zone_t *zone, ctl_args_t *args)
 	free(zonefile);
 
 	// Purge the zone journal.
+	/* // FIXME use journal_scrape()
 	char *journalfile = conf_journalfile(conf(), zone->name);
 	(void)unlink(journalfile);
 	free(journalfile);
+	*/
 
 	// Purge the zone timers.
 	(void)remove_timer_db(args->server->timers_db, args->server->zone_db,
