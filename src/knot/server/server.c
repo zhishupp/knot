@@ -153,7 +153,6 @@ static int dont_pmtud(int sock, int family)
 		int pmtud_omit = IP_PMTUDISC_OMIT;
 		if(setsockopt(sock, IPPROTO_IP, IP_MTU_DISCOVER,
 			&pmtud_omit, sizeof(pmtud_omit)) == 0) return 1;
-#endif
 #elif defined(IP_DONTFRAG)
 		/* BSDs and others */
 		int dontfrag_off = 0;
@@ -166,12 +165,10 @@ static int dont_pmtud(int sock, int family)
 		int pmtud_omit = IPV6_PMTUDISC_OMIT;
 		if(setsockopt(sock, IPPROTO_IPV6, IPV6_MTU_DISCOVER,
 		       &pmtud_omit, sizeof(pmtud_omit)) == 0) return 1;
-#endif
 #elif defined(IPV6_USE_MIN_MTU)
 		int min_mtu_on = 1;
 		if(setsockopt(sock, IPPROTO_IPV6, IPV6_USE_MIN_MTU,
 			&min_mtu_on, sizeof(min_mtu_on)) == 0) return 1;
-#endif
 #elif defined(IPV6_MTU)
 		/* fallback to IPV6_MTU if IPV6_USE_MIN_MTU not available */
 		int ipv6_min_mtu = IPV6_MIN_MTU;
