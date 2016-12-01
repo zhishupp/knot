@@ -78,6 +78,11 @@ typedef struct tcp_client {
 	uint8_t *buf_pos;
 	size_t buf_len;
 	uint8_t buf[KNOT_WIRE_MAX_PKTSIZE + 2];
+	uv_write_t write_req;
+	uv_buf_t tx[2];
+	knot_pkt_t *ans;
+	uint16_t pktsize;
+	uint8_t ans_buf[KNOT_WIRE_MAX_PKTSIZE];
 } tcp_client_t;
 
 typedef struct tcp_server {
@@ -181,7 +186,17 @@ static write_ctx_t *write_ctx_alloc(knot_mm_t *mm)
 	return res;
 }
 
-static int generate_answer(tcp_client_t *client, write_ctx_t *write)
+static void write_init(tcp_client_t *client)
+{
+	client->tx[0].base = (char *)&client->pktsize;
+	client->tx[0].len = sizeof(uint16_t);
+	client->tx[1].base = (char *)client->ans_buf;
+	client->tx[1].len = KNOT_WIRE_MAX_PKTSIZE;
+	client->ans = knot_pkt_new(client->tx[1].base, client->tx[1].len, client->layer.mm);
+	client->write_req.data = client;
+}
+
+static int generate_answer(tcp_client_t *client)
 {
 	/* Timeout. */
 	rcu_read_lock();
@@ -193,15 +208,15 @@ static int generate_answer(tcp_client_t *client, write_ctx_t *write)
 	int state = client->layer.state;
 
 	while (state & (KNOT_STATE_PRODUCE|KNOT_STATE_FAIL)) {
-		state = knot_layer_produce(&client->layer, write->ans);
+		state = knot_layer_produce(&client->layer, client->ans);
 		if (state & KNOT_STATE_FAIL) {
 		}
 		/* Send, if response generation passed and wasn't ignored. */
-		if (write->ans->size > 0 && !(state & (KNOT_STATE_FAIL|KNOT_STATE_NOOP))) {
-			write->pktsize = htons(write->ans->size);
-			write->tx[1].base = (char *)write->ans->wire;
-			write->tx[1].len = write->ans->size;
-			uv_write(&write->req, (uv_stream_t *)&client->handle, write->tx, 2, on_write);
+		if (client->ans->size > 0 && !(state & (KNOT_STATE_FAIL|KNOT_STATE_NOOP))) {
+			client->pktsize = htons(client->ans->size);
+			client->tx[1].base = (char *)client->ans->wire;
+			client->tx[1].len = client->ans->size;
+			uv_write(&client->write_req, (uv_stream_t *)&client->handle, client->tx, 2, on_write);
 			return WRITE;
 		}
 	}
@@ -233,13 +248,12 @@ static int client_serve(tcp_client_t *client)
 
 			/* Initialize processing layer. */
 			knot_layer_begin(&client->layer, &client->param);
-			write_ctx_t *write = write_ctx_alloc(client->layer.mm);
-			write->client = client;
+			write_init(client);
 
 			/* Input packet. */
 			knot_pkt_parse(query, 0);
 			knot_layer_consume(&client->layer, query);
-			return generate_answer(client, write);
+			return generate_answer(client);
 		}
 	}
 	return NODATA;
@@ -275,16 +289,17 @@ static void on_read(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
 
 static void on_write (uv_write_t* req, int status)
 {
-	write_ctx_t *write = req->data;
+	tcp_client_t *client = req->data;
 
-	if (generate_answer(write->client, write) == DONE) {
+	if (generate_answer(client) == DONE) {
+		mp_flush(client->layer.mm->ctx);
 		int state;
-		while ((state = client_serve(write->client)) == DONE) {
-			mp_flush(write->client->layer.mm->ctx);
+		while ((state = client_serve(client)) == DONE) {
+			mp_flush(client->layer.mm->ctx);
 		}
 		if (state == NODATA) {
-			client_save_buffer(write->client);
-			uv_read_start((uv_stream_t *)&write->client->handle,
+			client_save_buffer(client);
+			uv_read_start((uv_stream_t *)&client->handle,
 			              read_buffer_alloc, on_read);
 		}
 	}
