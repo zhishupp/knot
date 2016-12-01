@@ -53,7 +53,6 @@ def send():
 
     # Publish the stats.
     stats = {**global_stats, **zone_stats}
-    #try:
     timestamp = str(int(time.time()))
     data = ""
     for metric in stats["server"]:
@@ -61,27 +60,27 @@ def send():
           data = data + ","
        data = data + metric + "=" + stats["server"][metric]
     print("server,instance=" + instance + " " + data + " " + timestamp, file=output)
-    '''for source in stats:
-        for metric in stats[source]:
-            if type(stats[source][metric]) is not dict:
-               print(source +  ",server=" + instance + " " + mertic + "=" )
-               #graphyte.send(source + "." + metric, int(stats[source][metric]))
-            else:
-                for context in stats[source][metric]:
-                    if type(stats[source][metric][context]) is not dict: 
-                        #graphyte.send(source + "." + metric + "." + context, int(stats[source][metric][context]))
-                    else:
-                        for group in stats[source][metric][context]:
-                            if type(stats[source][metric][context][group]) is not dict: 
-                                #graphyte.send(source + "." + metric + "." + context + "." + group, int(stats[source][metric][context][group]))
-                            else:
-                                for mtype in stats[source][metric][context][group]:
-                                    if type(stats[source][metric][context][group][mtype]) is not dict: 
-                                        #graphyte.send(source + "." + metric + "." + context + "." + group + "." + mtype, int(stats[source][metric][context][group][mtype]))
-    '''
-    print(output.getvalue())
+    data = ""
+    '''for zone in stats["zone"]:
+        for group in stats["zone"][zone]:
+            for metric in stats["zone"][zone][group]:
+                if data is not "":
+                   data = data + ","
+                data = data + metric + "=" + stats["zone"][zone][group][metric]
+            print("zone,instance=" + instance + ",zone=" + zone + ",group=" + group + " " + data + " " + timestamp, file=output)'''
+    for group in stats["mod-stats"]:
+        if type(stats["mod-stats"][group]) is not dict:
+            print("module,instance=" + instance + " " + group + "=" + stats["mod-stats"][group] + " " + timestamp, file=output)
+        else:
+           data = ""
+           for metric in stats["mod-stats"][group]:
+               if data is not "":
+                  data = data + ","
+               data = data + metric + "=" + stats["mod-stats"][group][metric]
+           print("module,instance=" + instance + ",group=" + group + " " + data + " " + timestamp, file=output)
+
     bin_data = output.getvalue()
-    os.system("curl -i -XPOST 'http://"+host+":"+port+"/write?db="+DB+"' --data-binary '" + bin_data + "'")
+    os.system("curl -i -XPOST 'http://"+host+":"+port+"/write?db="+DB+"&precision=s' --data-binary '" + bin_data + "'")
     
     return
 
