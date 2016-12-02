@@ -1,4 +1,4 @@
-/*  Copyright (C) 2016 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
+/*  Copyright (C) 2011 CZ.NIC, z.s.p.o. <knot-dns@labs.nic.cz>
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
@@ -161,6 +161,7 @@ int zone_dump_text(zone_contents_t *zone, FILE *file, bool comments)
 		.rr_count = 0,
 		.origin = apex->owner,
 		.style = &KNOT_DUMP_STYLE_DEFAULT,
+		.first_comment = NULL,
 		.dump_rrsig = false,
 		.dump_nsec = false
 	};
