@@ -351,6 +351,8 @@ AS_IF([test "$have_lmdb" != "no"],[
     AC_SUBST([lmdb_LIBS])
     enable_lmdb=shared
     ],[
+    lmdb_CFLAGS="-I${srcdir}/contrib/lmdb"
+    AC_SUBST([lmdb_CFLAGS])
     enable_lmdb=embedded
     ])
 AM_CONDITIONAL([HAVE_LMDB], test "$have_lmdb" != "no")
