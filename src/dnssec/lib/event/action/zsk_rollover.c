@@ -200,20 +200,21 @@ static int exec_remove_old_key(dnssec_event_ctx_t *ctx)
 	dnssec_keyusage_remove(keyusage, retired->id, ctx->zone->name);
 	dnssec_keyusage_save(keyusage, path);
 
-
-	if (dnssec_keyusage_is_used(keyusage, retired->id)) {
-		return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
-	}
-
 	retired->timing.remove = ctx->now;
-
-	dnssec_keystore_remove_key(ctx->keystore, retired->id);
 	dnssec_list_foreach(item, ctx->zone->keys) {
 		dnssec_kasp_key_t *key = dnssec_item_get(item);
 		if (key->id == retired->id) {
 			dnssec_list_remove(item);
 		}
 	}
+
+	if (dnssec_keyusage_is_used(keyusage, retired->id)) {
+		dnssec_list_clear(keyusage);
+		free(path);
+		return dnssec_kasp_zone_save(ctx->kasp, ctx->zone);
+	}
+
+	dnssec_keystore_remove_key(ctx->keystore, retired->id);
 
 	dnssec_list_clear(keyusage);
 	free(path);

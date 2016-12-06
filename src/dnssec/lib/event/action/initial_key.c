@@ -58,6 +58,9 @@ static int generate_initial_key(dnssec_event_ctx_t *ctx, bool ksk)
 		return r;
 	}
 
+	if (ksk) {
+		return DNSSEC_EOK;
+	}
 	char *path;
 	if (asprintf(&path, "%s/keyusage", ctx->kasp->functions->base_path(ctx->kasp->ctx)) == -1){
 		return DNSSEC_ENOMEM;

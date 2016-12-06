@@ -134,7 +134,7 @@ int kdnssec_kasp(dnssec_kasp_t **kasp, bool legacy)
 			.zone_load       = zone_load,
 			.zone_save       = zone_save,
 			.policy_load     = policy_load,
-			.keystore_load   = keystore_load,
+			.keystore_load   = keystore_load
 		};
 
 		conf_api.init      = dnssec_kasp_dir_api()->init;
