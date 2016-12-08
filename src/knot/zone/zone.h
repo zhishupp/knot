@@ -81,13 +81,13 @@ typedef struct zone
 	struct zone_update *control_update;
 
 	/*! \brief Journal structure. */
-	journal_t * journal;
+	journal_t *journal;
 
 	/*! \brief Journal access lock. */
 	pthread_mutex_t journal_lock;
 
 	/*! \brief Ptr to journal DB (in struct server) */
-	journal_db_t ** journal_db;
+	journal_db_t **journal_db;
 
 	/*! \brief Preferred master lock. */
 	pthread_mutex_t preferred_lock;
@@ -136,7 +136,7 @@ int zone_changes_load(conf_t *conf, zone_t *zone, list_t *dst, uint32_t from);
 /*! \brief Synchronize zone file with journal. */
 int zone_flush_journal(conf_t *conf, zone_t *zone);
 
-int zone_check_journal(conf_t * conf, zone_t * zone, int warn_level);
+int zone_check_journal(conf_t *conf, zone_t *zone, int warn_level);
 
 /*!
  * \brief Atomically switch the content of the zone.

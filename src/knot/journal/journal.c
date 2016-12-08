@@ -1359,6 +1359,17 @@ bool journal_exists(journal_db_t **db, knot_dname_t *zone_name)
 	return (res == 1);
 }
 
+static knot_db_val_t * dbval_copy(const knot_db_val_t * from)
+{
+	knot_db_val_t * to = malloc(sizeof(knot_db_val_t) + from->len);
+	if (to != NULL) {
+		memcpy(to, from, sizeof(knot_db_val_t));
+		to->data = to + 1; // == ((uit8_t *)to) + sizeof(knot_db_val_t)
+		memcpy(to->data, from->data, from->len);
+	}
+	return to;
+} // TODO think of moving this fun into different place/lib
+
 int scrape_journal(journal_t *j)
 {
 	if (j->db == NULL) return KNOT_EINVAL;
@@ -1366,32 +1377,39 @@ int scrape_journal(journal_t *j)
 	txn_begin(txn, 1);
 	txn_check_ret(txn);
 
-	int del_prev = 0;
 	knot_db_val_t key = { .len = 0, .data = "" };
+
+	list_t to_del;
+	init_list(&to_del);
 
 	txn_iter_begin(txn);
 	while (txn->ret == KNOT_EOK && txn->iter != NULL) {
-		if (del_prev) {
-			txn->ret = j->db->db_api->del(txn->txn, &key);
-		}
-		del_prev = 0;
-
 		txn_iter_key(txn, &key);
-		if (strlen((const char *) key.data) + 1 != key.len // not a global key
-                    || knot_dname_cmp((const knot_dname_t *) key.data, j->zone) == 0) { // key belongs to this zone
-			del_prev = 1;
+		if (knot_dname_is_equal((const knot_dname_t *) key.data, j->zone)) {
+			knot_db_val_t * inskey = dbval_copy(&key);
+			if (inskey == NULL) {
+				txn->ret = KNOT_ENOMEM;
+				goto scrape_end;
+			}
+			ptrlist_add(&to_del, inskey, NULL);
 		}
-
 		txn_iter_next(txn);
 	}
-	if (txn->ret == KNOT_EOK && del_prev) {
-		txn->ret = j->db->db_api->del(txn->txn, &key);
+	if (txn->ret == KNOT_ENOENT) {
+		txn->ret = KNOT_EOK;
 	}
 	txn_iter_finish(txn);
+
 	if (txn->ret == KNOT_EOK) {
+		ptrnode_t * del_one;
+		WALK_LIST(del_one, to_del) {
+			txn->ret = j->db->db_api->del(txn->txn, (knot_db_val_t *)del_one->d);
+		}
 		md_update_journal_count(txn, -1);
 		txn->ret = j->db->db_api->txn_commit(txn->txn);
 	}
+	scrape_end:
+	ptrlist_free(&to_del, NULL);
 
 	return txn->ret;
 }
@@ -1418,7 +1436,7 @@ void journal_metadata_info(journal_t *j, int *is_empty, uint32_t *serial_from, u
 	txn_abort(txn);
 }
 
-int journal_db_list_zones(journal_db_t ** db, list_t * zones)
+int journal_db_list_zones(journal_db_t **db, list_t *zones)
 {
 	uint32_t expected_count;
 

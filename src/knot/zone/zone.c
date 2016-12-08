@@ -33,20 +33,9 @@
 #include "contrib/ucw/lists.h"
 #include "contrib/ucw/mempool.h"
 
-//#define JOURNAL_LOG_LOCKING 1
-
-#ifdef JOURNAL_LOG_LOCKING
-#define JOURNAL_LOG_LOCK fprintf(stderr, "journal lock line %d\n", __LINE__);
-#define JOURNAL_LOG_UNLOCK fprintf(stderr, "journal unlock line %d\n", __LINE__);
-#else
-#define JOURNAL_LOG_LOCK
-#define JOURNAL_LOG_UNLOCK
-#endif
-
 #define JOURNAL_LOCK_MUTEX (&zone->journal_lock)
-
-#define JOURNAL_LOCK_RW JOURNAL_LOG_LOCK pthread_mutex_lock(JOURNAL_LOCK_MUTEX);
-#define JOURNAL_UNLOCK_RW JOURNAL_LOG_UNLOCK pthread_mutex_unlock(JOURNAL_LOCK_MUTEX);
+#define JOURNAL_LOCK_RW pthread_mutex_lock(JOURNAL_LOCK_MUTEX);
+#define JOURNAL_UNLOCK_RW pthread_mutex_unlock(JOURNAL_LOCK_MUTEX);
 
 static void free_ddns_queue(zone_t *z)
 {
@@ -306,10 +295,16 @@ int zone_changes_load(conf_t *conf, zone_t *zone, list_t *dst, uint32_t from)
 
 	int ret;
 
-	if (!journal_exists(zone->journal_db, zone->name)) ret = KNOT_ENOENT;
-	else ret = open_journal(conf, zone);
+	if (!journal_exists(zone->journal_db, zone->name)) {
+		ret = KNOT_ENOENT;
+	}
+	else {
+		ret = open_journal(conf, zone);
+	}
 
-	if (ret == KNOT_EOK) ret = journal_load_changesets(zone->journal, dst, from);
+	if (ret == KNOT_EOK) {
+		ret = journal_load_changesets(zone->journal, dst, from);
+	}
 
 	return ret;
 }
@@ -320,13 +315,11 @@ int zone_flush_journal(conf_t *conf, zone_t *zone)
 		return KNOT_EINVAL;
 	}
 
-	int ret;
-
 	JOURNAL_LOCK_RW
 
 	// NO open_journal() here.
 
-	ret = flush_journal(conf, zone);
+	int ret = flush_journal(conf, zone);
 
 	JOURNAL_UNLOCK_RW
 
@@ -335,11 +328,11 @@ int zone_flush_journal(conf_t *conf, zone_t *zone)
 
 int zone_check_journal(conf_t * conf, zone_t * zone, int warn_level)
 {
-	int ret;
+	int ret = open_journal(conf, zone);
 
-	ret = open_journal(conf, zone);
-
-	if (ret == KNOT_EOK) ret = journal_check(zone->journal, warn_level);
+	if (ret == KNOT_EOK) {
+		ret = journal_check(zone->journal, warn_level);
+	}
 
 	close_journal(zone);
 	return ret;

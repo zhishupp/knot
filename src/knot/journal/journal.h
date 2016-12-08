@@ -45,12 +45,17 @@ typedef struct {
 	// specific metadata: occupied
 } journal_metadata_t;
 
-
 typedef struct {
 	journal_db_t *db;
 	knot_dname_t *zone;
 	//journal_metadata_t md;
 } journal_t;
+
+enum {
+	KNOT_JOURNAL_CHECK_SILENT = 0,
+	KNOT_JOURNAL_CHECK_WARN = 1,
+	KNOT_JOURNAL_CHECK_INFO = 2
+};
 
 /*!
  * \brief Allocate a new journal structure.
@@ -189,13 +194,7 @@ void journal_metadata_info(journal_t *j, int *is_empty, uint32_t *serial_from, u
  * \retval KNOT_EMALF  different # of zones found than expected
  * \retval KNOT_E*     other error
  */
-int journal_db_list_zones(journal_db_t ** db, list_t * zones);
-
-enum {
-	KNOT_JOURNAL_CHECK_SILENT = 0,
-	KNOT_JOURNAL_CHECK_WARN = 1,
-	KNOT_JOURNAL_CHECK_INFO = 2
-};
+int journal_db_list_zones(journal_db_t **db, list_t *zones);
 
 /*! \brief Check the journal consistency, errors to stderr.
  *

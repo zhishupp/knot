@@ -244,7 +244,7 @@ static const yp_item_t desc_template[] = {
 	{ C_TIMER_DB,            YP_TSTR,  YP_VSTR = { "timers" }, CONF_IO_FRLD_ZONES }, \
 	{ C_GLOBAL_MODULE,       YP_TDATA, YP_VDATA = { 0, NULL, mod_id_to_bin, mod_id_to_txt }, \
 	                                   YP_FMULTI | CONF_IO_FRLD_MOD, { check_modref } }, \
-	{ C_JOURNAL,             YP_TSTR,  YP_VSTR = { "knot_journal.db" }, CONF_IO_FRLD_ZONES }, \
+	{ C_JOURNAL,             YP_TSTR,  YP_VSTR = { "journal.db" }, CONF_IO_FRLD_ZONES }, \
 	{ C_MAX_JOURNAL_SIZE,    YP_TINT,  YP_VINT = { 1024 * 1024, INT64_MAX, \
 	                                               1024 * 1024 * 1024, YP_SSIZE } }, \
 	{ NULL }
